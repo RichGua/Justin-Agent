@@ -86,7 +86,7 @@ class OpenAICompatibleChatProvider(ChatProvider):
             raise RuntimeError(self._format_network_error(exc)) from exc
 
         try:
-            return payload_json["choices"][0]["message"]["content"].strip()
+            return self._extract_response_text(payload_json)
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError(f"Unexpected model response: {payload_json}") from exc
 
@@ -119,3 +119,65 @@ class OpenAICompatibleChatProvider(ChatProvider):
             "Model request timed out after 60 seconds. "
             "Provider/network may be slow or blocked. Check API settings and retry."
         )
+
+    def _extract_response_text(self, payload_json: dict) -> str:
+        choices = payload_json.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError(f"Unexpected model response: {payload_json}")
+
+        first_choice = choices[0] if isinstance(choices[0], dict) else {}
+        message = first_choice.get("message")
+        finish_reason = first_choice.get("finish_reason")
+
+        if isinstance(message, dict):
+            content = self._normalize_message_content(message.get("content"))
+            if content:
+                return content
+
+            # Some OpenAI-compatible providers (for example reasoning models on NIM)
+            # may return only reasoning_content when output hits token limits.
+            reasoning = message.get("reasoning_content")
+            if isinstance(reasoning, str) and reasoning.strip():
+                if finish_reason == "length":
+                    return (
+                        "Model response was truncated before final assistant content "
+                        "(finish_reason=length). If your provider supports it, raise the token limit and retry.\n\n"
+                        f"[partial reasoning]\n{reasoning.strip()}"
+                    )
+                return reasoning.strip()
+
+        text = first_choice.get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+
+        if finish_reason == "length":
+            raise RuntimeError(
+                "Model response was truncated before a final assistant message "
+                "(finish_reason=length). If your provider supports it, raise the token limit and retry."
+            )
+
+        raise RuntimeError(f"Unexpected model response: {payload_json}")
+
+    def _normalize_message_content(self, raw_content) -> str | None:
+        if isinstance(raw_content, str):
+            cleaned = raw_content.strip()
+            return cleaned or None
+
+        if isinstance(raw_content, list):
+            parts: list[str] = []
+            for item in raw_content:
+                if isinstance(item, str):
+                    chunk = item.strip()
+                    if chunk:
+                        parts.append(chunk)
+                    continue
+                if isinstance(item, dict):
+                    for key in ("text", "content"):
+                        value = item.get(key)
+                        if isinstance(value, str) and value.strip():
+                            parts.append(value.strip())
+                            break
+            if parts:
+                return "\n".join(parts)
+
+        return None
