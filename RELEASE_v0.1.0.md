@@ -1,10 +1,19 @@
-# v0.1.0 Release Notes
+# Justin Agent v0.1.0 Release Notes
 
 ## 中文
 
-### Justin-Agent v0.1.0 首发版本
+### Justin Agent v0.1.0 首发版本
 
-这是 `Justin-Agent` 的第一个可用版本。当前版本聚焦在“本地优先 + 可审核长期记忆 + 可追溯回答”这条主链路，目标不是一开始就做成全自动 Agent，而是先把个人长期使用最关键的记忆闭环做稳。
+这是 `Justin Agent` 的第一个正式可用版本，也是首个完成 Justin 品牌化统一后的版本。当前版本聚焦在“本地优先 + 可审核长期记忆 + 可追溯回答”这条主链路，目标不是一开始就做成全自动 Agent，而是先把个人长期使用最关键的记忆闭环做稳。
+
+### 发布定位
+
+- 发布标签：`v0.1.0`
+- 仓库：`RichGua/Justin-Agent`
+- 该标签对应首个完整 Justin 品牌化版本
+- 命令行入口统一为 `Justin` / `justin`
+- 环境变量前缀统一为 `JUSTIN_*`
+- Python 模块入口统一为 `python -m justin`
 
 ### 本版本包含
 
@@ -16,6 +25,7 @@
 - 本地 Web 仪表盘
 - 可替换模型适配层
 - 基础测试用例与运行说明
+- `uv` 优先的安装方式与无需 clone 的快速运行路径
 
 ### 适合谁
 
@@ -27,6 +37,7 @@
 - 本地可运行：不强依赖云端数据库或第三方后台
 - 可追溯：回答可以关联到被召回的已确认记忆
 - 易扩展：后续可以继续接更强模型、任务系统、定时器、插件和多入口
+- 品牌统一：仓库、包、命令、环境变量和说明文档都已统一到 Justin 命名
 
 ### 已验证
 
@@ -34,6 +45,7 @@
 - CLI 聊天链路可用
 - HTTP API 可用
 - 本地 Web 面板可启动并使用
+- `python -m justin` 模块入口可用
 
 ### 下一步方向
 
@@ -44,9 +56,18 @@
 
 ## English
 
-### Justin-Agent v0.1.0 Initial Release
+### Justin Agent v0.1.0 Initial Release
 
-This is the first usable release of `Justin-Agent`. The current version focuses on the core loop of `local-first usage + reviewable long-term memory + traceable responses`. It is intentionally not trying to be a fully autonomous agent on day one; the goal is to build a solid personal memory system first.
+This is the first formal release of `Justin Agent`, and the first one that fully reflects the Justin brand across the repository, package, commands, environment variables, and documentation. The current version focuses on the core loop of `local-first usage + reviewable long-term memory + traceable responses`. It is intentionally not trying to be a fully autonomous agent on day one; the goal is to build a solid personal memory system first.
+
+### Release Identity
+
+- Release tag: `v0.1.0`
+- Repository: `RichGua/Justin-Agent`
+- This tag now represents the first fully Justin-branded release
+- CLI entrypoint is standardized as `Justin` / `justin`
+- Environment variable prefix is standardized as `JUSTIN_*`
+- Python module entrypoint is standardized as `python -m justin`
 
 ### Included in this release
 
@@ -58,6 +79,7 @@ This is the first usable release of `Justin-Agent`. The current version focuses 
 - Built-in local Web dashboard
 - Pluggable model adapter layer
 - Basic tests and setup documentation
+- `uv`-first installation guidance plus no-clone quick-start paths
 
 ### Who this is for
 
@@ -69,6 +91,7 @@ This release is meant for developers and personal users who want to build their 
 - Runs locally: no hard dependency on a cloud database or hosted backend
 - Traceable: responses can be tied back to recalled approved memories
 - Extendable: ready for stronger models, task systems, schedulers, plugins, and more interfaces later
+- Fully branded: repository naming, package naming, commands, environment variables, and docs now match Justin
 
 ### Verified in this version
 
@@ -76,6 +99,7 @@ This release is meant for developers and personal users who want to build their 
 - CLI chat flow works
 - HTTP API works
 - Local Web dashboard starts and works
+- `python -m justin` works as the module entrypoint
 
 ### Next directions
 
