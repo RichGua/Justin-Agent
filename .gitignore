@@ -6,3 +6,21 @@
 __pycache__/
 */__pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# local environments / tooling
+.venv/
+.env
+.env.*
+!.env.example
+justin_agent.egg-info/
+
+# common secret file types
+*.pem
+*.key
+*.p12
+*.pfx
+
+# local git hook cache/logs
+.githooks/.cache/

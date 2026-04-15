@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
-from .config import AgentConfig
+from .config import (
+    AgentConfig,
+    PROVIDER_LOCAL,
+    PROVIDER_NVIDIA_NIM,
+    PROVIDER_OLLAMA,
+    PROVIDER_OPENAI,
+    PROVIDER_OPENAI_COMPATIBLE,
+)
 from .embeddings import LocalHashEmbeddingProvider
 from .extractor import HeuristicMemoryExtractor
 from .models import ChatProvider, LocalFallbackChatProvider, OpenAICompatibleChatProvider
@@ -18,23 +26,71 @@ class RuntimeBundle:
     chat_provider: ChatProvider
 
 
+def build_chat_provider(config: AgentConfig) -> ChatProvider:
+    provider = (config.model_provider or PROVIDER_LOCAL).lower()
+    if provider == PROVIDER_LOCAL:
+        return LocalFallbackChatProvider()
+
+    if provider in {PROVIDER_OPENAI, PROVIDER_OPENAI_COMPATIBLE}:
+        api_base = (config.api_base or "https://api.openai.com/v1").strip()
+        _validate_api_base(provider, api_base)
+        api_key = (config.api_key or "").strip()
+        if not api_key:
+            raise RuntimeError("OPENAI provider requires JUSTIN_API_KEY.")
+        model_name = config.model_name or "gpt-4.1-mini"
+        return OpenAICompatibleChatProvider(model_name=model_name, api_base=api_base, api_key=api_key)
+
+    if provider == PROVIDER_OLLAMA:
+        api_base = (config.api_base or "http://localhost:11434/v1").strip()
+        _validate_api_base(provider, api_base)
+        model_name = config.model_name or "llama3.1"
+        api_key = (config.api_key or "").strip() or None
+        return OpenAICompatibleChatProvider(model_name=model_name, api_base=api_base, api_key=api_key)
+
+    if provider == PROVIDER_NVIDIA_NIM:
+        api_base = (config.api_base or "https://integrate.api.nvidia.com/v1").strip()
+        _validate_api_base(provider, api_base)
+        api_key = (config.api_key or "").strip()
+        if not api_key:
+            raise RuntimeError("NVIDIA NIM provider requires JUSTIN_API_KEY.")
+        model_name = config.model_name or "meta/llama-3.1-70b-instruct"
+        return OpenAICompatibleChatProvider(model_name=model_name, api_base=api_base, api_key=api_key)
+
+    raise RuntimeError(
+        f"Unsupported JUSTIN_MODEL_PROVIDER '{config.model_provider}'. "
+        f"Use one of: local, openai, ollama, nvidia-nim."
+    )
+
+
+def _validate_api_base(provider: str, api_base: str) -> None:
+    parsed = urlparse(api_base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError(
+            f"Invalid JUSTIN_API_BASE '{api_base}'. "
+            "Expected a full URL, e.g. 'https://api.openai.com/v1'."
+        )
+
+    host = parsed.netloc.lower()
+    if "nidia.com" in host:
+        raise RuntimeError(
+            "JUSTIN_API_BASE appears to contain a typo: 'nidia.com'. "
+            "Did you mean 'nvidia.com'?"
+        )
+
+    if provider == PROVIDER_NVIDIA_NIM and "nvidia.com" not in host:
+        raise RuntimeError(
+            "NVIDIA NIM provider expects JUSTIN_API_BASE to point to NVIDIA, "
+            "for example 'https://integrate.api.nvidia.com/v1'."
+        )
+
+
 def build_runtime_bundle(config: AgentConfig | None = None) -> RuntimeBundle:
     config = config or AgentConfig.from_env()
     config.ensure_directories()
     embedder = LocalHashEmbeddingProvider(dimensions=config.embedding_dimensions)
     store = AgentStore(config.database_path, embedder)
     extractor = HeuristicMemoryExtractor()
-
-    if config.model_provider == "openai-compatible":
-        if not (config.api_base and config.api_key):
-            raise RuntimeError("OpenAI-compatible provider requires JUSTIN_API_BASE and JUSTIN_API_KEY.")
-        chat_provider: ChatProvider = OpenAICompatibleChatProvider(
-            model_name=config.model_name,
-            api_base=config.api_base,
-            api_key=config.api_key,
-        )
-    else:
-        chat_provider = LocalFallbackChatProvider()
+    chat_provider = build_chat_provider(config)
 
     return RuntimeBundle(config=config, store=store, extractor=extractor, chat_provider=chat_provider)
 
@@ -121,6 +177,16 @@ class JustinRuntime:
 
     def close(self) -> None:
         self.store.close()
+
+    def apply_config(self, config: AgentConfig) -> None:
+        # Keep runtime state but switch model/config behavior in-process.
+        self.config.model_provider = config.model_provider
+        self.config.model_name = config.model_name
+        self.config.api_base = config.api_base
+        self.config.api_key = config.api_key
+        self.config.retrieval_top_k = config.retrieval_top_k
+        self.config.context_messages = config.context_messages
+        self.chat_provider = build_chat_provider(self.config)
 
     def _build_system_prompt(self, recalled_memories) -> str:
         memory_block = "\n".join(f"- {memory.content}" for memory in recalled_memories[:5]) or "- none"

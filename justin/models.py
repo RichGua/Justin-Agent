@@ -52,7 +52,7 @@ class LocalFallbackChatProvider(ChatProvider):
 class OpenAICompatibleChatProvider(ChatProvider):
     model_name: str
     api_base: str
-    api_key: str
+    api_key: str | None = None
 
     def generate(self, payload: ChatRequest) -> str:
         messages = [{"role": "system", "content": payload.system_prompt}, *payload.conversation]
@@ -63,25 +63,59 @@ class OpenAICompatibleChatProvider(ChatProvider):
                 "temperature": 0.3,
             }
         ).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         http_request = request.Request(
             url=f"{self.api_base.rstrip('/')}/chat/completions",
             data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
+            headers=headers,
             method="POST",
         )
         try:
             with request.urlopen(http_request, timeout=60) as response:
                 payload_json = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise RuntimeError(self._timeout_message()) from exc
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Model request failed with HTTP {exc.code}: {detail}") from exc
         except error.URLError as exc:
-            raise RuntimeError(f"Model request failed: {exc.reason}") from exc
+            raise RuntimeError(self._format_network_error(exc)) from exc
 
         try:
             return payload_json["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError(f"Unexpected model response: {payload_json}") from exc
+
+    def _format_network_error(self, exc: error.URLError) -> str:
+        reason = exc.reason
+        reason_text = str(reason)
+        lowered = reason_text.lower()
+
+        if isinstance(reason, TimeoutError) or "timeout" in lowered or "timed out" in lowered:
+            return self._timeout_message()
+
+        winerror = getattr(reason, "winerror", None)
+        if winerror == 10013:
+            return (
+                "Model request blocked by OS/network policy (WinError 10013). "
+                "Allow outbound HTTPS for your Python runtime, or switch provider via 'Justin setup' "
+                "to 'local'/'ollama' for offline use."
+            )
+
+        if "SSL: UNEXPECTED_EOF_WHILE_READING" in reason_text:
+            return (
+                "TLS handshake failed while connecting to model API. "
+                "Check JUSTIN_API_BASE (domain typo/common proxy issue) and network policy."
+            )
+
+        return f"Model request failed: {reason_text}"
+
+    def _timeout_message(self) -> str:
+        return (
+            "Model request timed out after 60 seconds. "
+            "Provider/network may be slow or blocked. Check API settings and retry."
+        )

@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .config import AgentConfig
 from .runtime import JustinRuntime, build_runtime_bundle
 from .types import to_plain_dict
 
@@ -144,8 +145,8 @@ def build_server(runtime: JustinRuntime, host: str, port: int) -> ThreadingHTTPS
     return ThreadingHTTPServer((host, port), AgentRequestHandler)
 
 
-def serve() -> None:
-    bundle = build_runtime_bundle()
+def serve(config: AgentConfig | None = None) -> None:
+    bundle = build_runtime_bundle(config)
     runtime = JustinRuntime(bundle)
     server = build_server(runtime, bundle.config.host, bundle.config.port)
     print(f"Justin listening on http://{bundle.config.host}:{bundle.config.port}")

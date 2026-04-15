@@ -52,6 +52,7 @@ uv run Justin
 ```
 
 This opens the interactive CLI directly.
+On first interactive run, Justin starts a setup wizard to choose `OPENAI`, `Ollama`, `Nvidia NIM`, or `local`.
 
 To start the local dashboard:
 
@@ -143,7 +144,7 @@ Open `http://127.0.0.1:8765`.
 Environment variables:
 
 - `JUSTIN_HOME`: local data directory, default `./.justin`
-- `JUSTIN_MODEL_PROVIDER`: `local` or `openai-compatible`
+- `JUSTIN_MODEL_PROVIDER`: `local`, `openai`, `ollama`, or `nvidia-nim`
 - `JUSTIN_MODEL_NAME`: remote model name
 - `JUSTIN_API_BASE`: OpenAI-compatible API base URL
 - `JUSTIN_API_KEY`: API key for the remote provider
@@ -153,12 +154,42 @@ Environment variables:
 Example:
 
 ```bash
-set JUSTIN_MODEL_PROVIDER=openai-compatible
+set JUSTIN_MODEL_PROVIDER=openai
 set JUSTIN_MODEL_NAME=gpt-4.1-mini
 set JUSTIN_API_BASE=https://api.openai.com/v1
 set JUSTIN_API_KEY=your_key_here
 Justin serve
 ```
+
+Run setup wizard manually anytime:
+
+```bash
+Justin setup
+```
+
+### Secret Safety
+
+- Never commit real API keys to GitHub.
+- Keep secrets in local `.env` or in Justin local settings (`.justin/settings.json`).
+- `.env*` and `.justin/` are git-ignored in this repository.
+- Use `.env.example` as the template and keep only placeholders in docs/snippets.
+
+Enable the built-in pre-commit secret scanner once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Manually run the scanner at any time:
+
+```bash
+python scripts/check_secrets.py --staged
+```
+
+中文补充：
+- 不要把真实密钥写进仓库文件并提交到 GitHub。
+- 推荐把密钥写到本地 `.env`（已被忽略）或 `.justin/settings.json`（目录已被忽略）。
+- 首次克隆后执行 `git config core.hooksPath .githooks`，提交前会自动扫描密钥。
 
 ### CLI Usage
 
@@ -230,6 +261,7 @@ uv run Justin
 ```
 
 这会直接进入交互式 CLI。
+首次进入交互模式时，Justin 会启动配置向导，支持 `OPENAI`、`Ollama`、`Nvidia NIM`、`local`。
 
 如果要启动本地 Web 面板：
 
@@ -323,7 +355,7 @@ python -m justin serve
 可用环境变量：
 
 - `JUSTIN_HOME`：本地数据目录，默认 `./.justin`
-- `JUSTIN_MODEL_PROVIDER`：`local` 或 `openai-compatible`
+- `JUSTIN_MODEL_PROVIDER`：`local`、`openai`、`ollama` 或 `nvidia-nim`
 - `JUSTIN_MODEL_NAME`：远程模型名
 - `JUSTIN_API_BASE`：兼容 OpenAI 的接口地址
 - `JUSTIN_API_KEY`：远程模型 API Key
@@ -333,11 +365,17 @@ python -m justin serve
 示例：
 
 ```bash
-set JUSTIN_MODEL_PROVIDER=openai-compatible
+set JUSTIN_MODEL_PROVIDER=openai
 set JUSTIN_MODEL_NAME=gpt-4.1-mini
 set JUSTIN_API_BASE=https://api.openai.com/v1
 set JUSTIN_API_KEY=your_key_here
 Justin serve
+```
+
+你也可以随时手动重跑配置向导：
+
+```bash
+Justin setup
 ```
 
 ### CLI 示例
