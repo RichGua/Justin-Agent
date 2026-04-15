@@ -16,7 +16,7 @@ MANIFEST_FILENAME = "justin.skill.json"
 @dataclass(slots=True)
 class SkillManifest:
     name: str
-    version: str = "0.1.0"
+    version: str = "0.2.0"
     summary: str = ""
     description: str = ""
     entry: str = "SKILL.md"
@@ -150,7 +150,7 @@ def load_skill_manifest(path: Path, source: str) -> SkillManifest:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest = SkillManifest(
             name=str(payload.get("name") or path.name),
-            version=str(payload.get("version") or "0.1.0"),
+            version=str(payload.get("version") or "0.2.0"),
             summary=str(payload.get("summary") or ""),
             description=str(payload.get("description") or ""),
             entry=str(payload.get("entry") or "SKILL.md"),

@@ -15,7 +15,7 @@ def build_server(runtime: JustinRuntime, host: str, port: int) -> ThreadingHTTPS
     web_dir = Path(__file__).with_name("web")
 
     class AgentRequestHandler(BaseHTTPRequestHandler):
-        server_version = "Justin/0.1"
+        server_version = "Justin/0.2"
 
         def do_GET(self) -> None:  # noqa: N802
             try:
