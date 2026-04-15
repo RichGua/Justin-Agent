@@ -38,14 +38,32 @@ def build_chat_provider(config: AgentConfig) -> ChatProvider:
         if not api_key:
             raise RuntimeError("OPENAI provider requires JUSTIN_API_KEY.")
         model_name = config.model_name or "gpt-4.1-mini"
-        return OpenAICompatibleChatProvider(model_name=model_name, api_base=api_base, api_key=api_key)
+        return OpenAICompatibleChatProvider(
+            model_name=model_name,
+            api_base=api_base,
+            api_key=api_key,
+            temperature=config.model_temperature,
+            top_p=config.model_top_p,
+            max_tokens=config.model_max_tokens,
+            timeout_seconds=config.model_timeout_seconds,
+            retry_max_tokens=config.model_retry_max_tokens,
+        )
 
     if provider == PROVIDER_OLLAMA:
         api_base = (config.api_base or "http://localhost:11434/v1").strip()
         _validate_api_base(provider, api_base)
         model_name = config.model_name or "llama3.1"
         api_key = (config.api_key or "").strip() or None
-        return OpenAICompatibleChatProvider(model_name=model_name, api_base=api_base, api_key=api_key)
+        return OpenAICompatibleChatProvider(
+            model_name=model_name,
+            api_base=api_base,
+            api_key=api_key,
+            temperature=config.model_temperature,
+            top_p=config.model_top_p,
+            max_tokens=config.model_max_tokens,
+            timeout_seconds=config.model_timeout_seconds,
+            retry_max_tokens=config.model_retry_max_tokens,
+        )
 
     if provider == PROVIDER_NVIDIA_NIM:
         api_base = (config.api_base or "https://integrate.api.nvidia.com/v1").strip()
@@ -54,7 +72,16 @@ def build_chat_provider(config: AgentConfig) -> ChatProvider:
         if not api_key:
             raise RuntimeError("NVIDIA NIM provider requires JUSTIN_API_KEY.")
         model_name = config.model_name or "meta/llama-3.1-70b-instruct"
-        return OpenAICompatibleChatProvider(model_name=model_name, api_base=api_base, api_key=api_key)
+        return OpenAICompatibleChatProvider(
+            model_name=model_name,
+            api_base=api_base,
+            api_key=api_key,
+            temperature=config.model_temperature,
+            top_p=config.model_top_p,
+            max_tokens=config.model_max_tokens,
+            timeout_seconds=config.model_timeout_seconds,
+            retry_max_tokens=config.model_retry_max_tokens,
+        )
 
     raise RuntimeError(
         f"Unsupported JUSTIN_MODEL_PROVIDER '{config.model_provider}'. "
@@ -184,6 +211,11 @@ class JustinRuntime:
         self.config.model_name = config.model_name
         self.config.api_base = config.api_base
         self.config.api_key = config.api_key
+        self.config.model_temperature = config.model_temperature
+        self.config.model_top_p = config.model_top_p
+        self.config.model_max_tokens = config.model_max_tokens
+        self.config.model_timeout_seconds = config.model_timeout_seconds
+        self.config.model_retry_max_tokens = config.model_retry_max_tokens
         self.config.retrieval_top_k = config.retrieval_top_k
         self.config.context_messages = config.context_messages
         self.chat_provider = build_chat_provider(self.config)

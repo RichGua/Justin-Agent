@@ -148,6 +148,11 @@ Environment variables:
 - `JUSTIN_MODEL_NAME`: remote model name
 - `JUSTIN_API_BASE`: OpenAI-compatible API base URL
 - `JUSTIN_API_KEY`: API key for the remote provider
+- `JUSTIN_MODEL_TEMPERATURE`: generation temperature, default `0.3`
+- `JUSTIN_MODEL_TOP_P`: generation top_p, default `0.95`
+- `JUSTIN_MODEL_MAX_TOKENS`: per-request token cap, default `1024`
+- `JUSTIN_MODEL_TIMEOUT_SECONDS`: HTTP timeout, default `60`
+- `JUSTIN_MODEL_RETRY_MAX_TOKENS`: retry cap when response is truncated, default `8192`
 - `JUSTIN_HOST`: server host, default `127.0.0.1`
 - `JUSTIN_PORT`: server port, default `8765`
 
@@ -158,6 +163,7 @@ set JUSTIN_MODEL_PROVIDER=openai
 set JUSTIN_MODEL_NAME=gpt-4.1-mini
 set JUSTIN_API_BASE=https://api.openai.com/v1
 set JUSTIN_API_KEY=your_key_here
+set JUSTIN_MODEL_MAX_TOKENS=2048
 Justin serve
 ```
 

@@ -33,6 +33,11 @@ class AgentConfig:
     model_name: str = "local-fallback"
     api_base: str | None = None
     api_key: str | None = None
+    model_temperature: float = 0.3
+    model_top_p: float = 0.95
+    model_max_tokens: int = 1024
+    model_timeout_seconds: int = 60
+    model_retry_max_tokens: int = 8192
     retrieval_top_k: int = 5
     context_messages: int = 8
     embedding_dimensions: int = 96
@@ -64,6 +69,13 @@ class AgentConfig:
             model_name=_pick("JUSTIN_MODEL_NAME", "model_name", "local-fallback"),
             api_base=_pick("JUSTIN_API_BASE", "api_base"),
             api_key=_pick("JUSTIN_API_KEY", "api_key"),
+            model_temperature=float(_pick("JUSTIN_MODEL_TEMPERATURE", "model_temperature", "0.3")),
+            model_top_p=float(_pick("JUSTIN_MODEL_TOP_P", "model_top_p", "0.95")),
+            model_max_tokens=int(_pick("JUSTIN_MODEL_MAX_TOKENS", "model_max_tokens", "1024")),
+            model_timeout_seconds=int(_pick("JUSTIN_MODEL_TIMEOUT_SECONDS", "model_timeout_seconds", "60")),
+            model_retry_max_tokens=int(
+                _pick("JUSTIN_MODEL_RETRY_MAX_TOKENS", "model_retry_max_tokens", "8192")
+            ),
             retrieval_top_k=int(_pick("JUSTIN_RETRIEVAL_TOP_K", "retrieval_top_k", "5")),
             context_messages=int(_pick("JUSTIN_CONTEXT_MESSAGES", "context_messages", "8")),
             embedding_dimensions=int(_pick("JUSTIN_EMBEDDING_DIMENSIONS", "embedding_dimensions", "96")),
@@ -83,6 +95,11 @@ class AgentConfig:
             "model_name": self.model_name,
             "api_base": self.api_base,
             "api_key": self.api_key,
+            "model_temperature": self.model_temperature,
+            "model_top_p": self.model_top_p,
+            "model_max_tokens": self.model_max_tokens,
+            "model_timeout_seconds": self.model_timeout_seconds,
+            "model_retry_max_tokens": self.model_retry_max_tokens,
             "retrieval_top_k": self.retrieval_top_k,
             "context_messages": self.context_messages,
             "embedding_dimensions": self.embedding_dimensions,

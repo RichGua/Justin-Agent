@@ -53,16 +53,33 @@ class OpenAICompatibleChatProvider(ChatProvider):
     model_name: str
     api_base: str
     api_key: str | None = None
+    temperature: float = 0.3
+    top_p: float = 0.95
+    max_tokens: int = 1024
+    timeout_seconds: int = 60
+    retry_max_tokens: int = 8192
 
     def generate(self, payload: ChatRequest) -> str:
         messages = [{"role": "system", "content": payload.system_prompt}, *payload.conversation]
-        body = json.dumps(
-            {
-                "model": self.model_name,
-                "messages": messages,
-                "temperature": 0.3,
-            }
-        ).encode("utf-8")
+        payload_json = self._request_chat_completion(messages=messages, max_tokens=self.max_tokens)
+        if self._should_retry_for_length(payload_json):
+            retry_tokens = self._next_retry_max_tokens(self.max_tokens)
+            payload_json = self._request_chat_completion(messages=messages, max_tokens=retry_tokens)
+
+        return self._extract_response_text(payload_json)
+
+    def _request_chat_completion(self, messages: list[dict[str, str]], max_tokens: int) -> dict:
+        body_obj: dict[str, object] = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": self.temperature,
+        }
+        if 0 < self.top_p <= 1:
+            body_obj["top_p"] = self.top_p
+        if max_tokens > 0:
+            body_obj["max_tokens"] = max_tokens
+
+        body = json.dumps(body_obj).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
         }
@@ -75,8 +92,9 @@ class OpenAICompatibleChatProvider(ChatProvider):
             method="POST",
         )
         try:
-            with request.urlopen(http_request, timeout=60) as response:
-                payload_json = json.loads(response.read().decode("utf-8"))
+            timeout = max(int(self.timeout_seconds), 1)
+            with request.urlopen(http_request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
         except TimeoutError as exc:
             raise RuntimeError(self._timeout_message()) from exc
         except error.HTTPError as exc:
@@ -85,10 +103,35 @@ class OpenAICompatibleChatProvider(ChatProvider):
         except error.URLError as exc:
             raise RuntimeError(self._format_network_error(exc)) from exc
 
-        try:
-            return self._extract_response_text(payload_json)
-        except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError(f"Unexpected model response: {payload_json}") from exc
+    def _should_retry_for_length(self, payload_json: dict) -> bool:
+        if self.retry_max_tokens <= 0:
+            return False
+        choices = payload_json.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return False
+        first_choice = choices[0] if isinstance(choices[0], dict) else {}
+        if first_choice.get("finish_reason") != "length":
+            return False
+        if self._choice_has_final_text(first_choice):
+            return False
+
+        next_tokens = self._next_retry_max_tokens(self.max_tokens)
+        return next_tokens > max(self.max_tokens, 0)
+
+    def _next_retry_max_tokens(self, current_tokens: int) -> int:
+        current = max(int(current_tokens), 1)
+        candidate = max(current * 4, 1024)
+        return min(candidate, max(int(self.retry_max_tokens), current))
+
+    def _choice_has_final_text(self, choice: dict) -> bool:
+        message = choice.get("message")
+        if isinstance(message, dict):
+            if self._normalize_message_content(message.get("content")):
+                return True
+        text = choice.get("text")
+        if isinstance(text, str) and text.strip():
+            return True
+        return False
 
     def _format_network_error(self, exc: error.URLError) -> str:
         reason = exc.reason
@@ -116,7 +159,7 @@ class OpenAICompatibleChatProvider(ChatProvider):
 
     def _timeout_message(self) -> str:
         return (
-            "Model request timed out after 60 seconds. "
+            f"Model request timed out after {max(int(self.timeout_seconds), 1)} seconds. "
             "Provider/network may be slow or blocked. Check API settings and retry."
         )
 
@@ -139,10 +182,9 @@ class OpenAICompatibleChatProvider(ChatProvider):
             reasoning = message.get("reasoning_content")
             if isinstance(reasoning, str) and reasoning.strip():
                 if finish_reason == "length":
-                    return (
-                        "Model response was truncated before final assistant content "
-                        "(finish_reason=length). If your provider supports it, raise the token limit and retry.\n\n"
-                        f"[partial reasoning]\n{reasoning.strip()}"
+                    raise RuntimeError(
+                        "Model returned reasoning text but no final assistant content "
+                        "(finish_reason=length). Increase JUSTIN_MODEL_MAX_TOKENS and retry."
                     )
                 return reasoning.strip()
 

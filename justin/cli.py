@@ -245,6 +245,11 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
 def _apply_env(config: AgentConfig) -> None:
     os.environ["JUSTIN_MODEL_PROVIDER"] = config.model_provider
     os.environ["JUSTIN_MODEL_NAME"] = config.model_name
+    os.environ["JUSTIN_MODEL_TEMPERATURE"] = str(config.model_temperature)
+    os.environ["JUSTIN_MODEL_TOP_P"] = str(config.model_top_p)
+    os.environ["JUSTIN_MODEL_MAX_TOKENS"] = str(config.model_max_tokens)
+    os.environ["JUSTIN_MODEL_TIMEOUT_SECONDS"] = str(config.model_timeout_seconds)
+    os.environ["JUSTIN_MODEL_RETRY_MAX_TOKENS"] = str(config.model_retry_max_tokens)
     os.environ["JUSTIN_HOST"] = str(config.host)
     os.environ["JUSTIN_PORT"] = str(config.port)
     if config.api_base:
