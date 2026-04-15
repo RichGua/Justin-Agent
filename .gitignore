@@ -1,0 +1,8 @@
+.personal_agent/
+.demo_data/
+.verify_data/
+.verify_data_api/
+.tmp_tests/
+__pycache__/
+*/__pycache__/
+*.pyc
