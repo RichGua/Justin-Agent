@@ -5,6 +5,9 @@ import json
 import os
 import sys
 import time
+from contextlib import nullcontext
+from dataclasses import dataclass
+from typing import Any, ContextManager
 
 from .config import (
     AgentConfig,
@@ -17,12 +20,251 @@ from .runtime import JustinRuntime, build_runtime_bundle
 from .server import serve
 from .types import to_plain_dict
 
+try:  # Optional UX dependency; CLI still works without Rich installed.
+    from rich.console import Console, Group
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+
+    RICH_AVAILABLE = True
+except ModuleNotFoundError:  # pragma: no cover - depends on local environment
+    Console = None
+    Group = None
+    Panel = None
+    Table = None
+    Text = None
+    RICH_AVAILABLE = False
+
 SETUP_ENV_KEYS = [
     "JUSTIN_MODEL_PROVIDER",
     "JUSTIN_MODEL_NAME",
     "JUSTIN_API_BASE",
     "JUSTIN_API_KEY",
 ]
+
+JUSTIN_ASCII_LOGO = r"""
+      _ _   _  ____ _____ ___ _   _
+     | | | | |/ ___|_   _|_ _| \ | |
+  _  | | | | |\___ \ | |  | ||  \| |
+ | |_| | |_| | ___) || |  | || |\  |
+  \___/ \___/ |____/ |_| |___|_| \_|
+"""
+
+
+@dataclass(slots=True)
+class CliMetrics:
+    turns: int = 0
+    failures: int = 0
+    total_latency_seconds: float = 0.0
+    last_latency_seconds: float = 0.0
+
+    @property
+    def avg_latency_seconds(self) -> float:
+        if self.turns <= 0:
+            return 0.0
+        return self.total_latency_seconds / self.turns
+
+
+class JustinCliRenderer:
+    def __init__(self, interactive: bool) -> None:
+        self.interactive = interactive
+        self.metrics = CliMetrics()
+        if RICH_AVAILABLE:
+            self.console = Console(soft_wrap=True)
+            self.err_console = Console(stderr=True, soft_wrap=True)
+        else:
+            self.console = None
+            self.err_console = None
+
+    def render_banner(self, config: AgentConfig, session_id: str | None) -> None:
+        if not self.interactive:
+            return
+
+        if not RICH_AVAILABLE:
+            line = "=" * 72
+            print(line)
+            print("JUSTIN CLI")
+            print(f"provider: {_provider_title(config)}")
+            print(f"model:    {config.model_name}")
+            print(f"session:  {session_id or 'new'}")
+            print(line)
+            return
+
+        logo = Text(JUSTIN_ASCII_LOGO.strip("\n"), style="bold #ffb000")
+        meta = Table.grid(padding=(0, 2))
+        meta.add_row("Provider", f"[bold]{_provider_title(config)}[/bold]")
+        meta.add_row("Model", config.model_name)
+        meta.add_row("Session", session_id or "new")
+        if config.api_base:
+            meta.add_row("API Base", config.api_base)
+        meta.add_row("Theme", "Amber / Hermes-like")
+
+        header = Group(
+            logo,
+            Text("-" * 45, style="#7f4d00"),
+            meta,
+        )
+        self.console.print(
+            Panel.fit(
+                header,
+                title="[bold #ffb000]JUSTIN CLI[/bold #ffb000]",
+                border_style="#ffb000",
+                padding=(1, 2),
+            )
+        )
+
+    def show_help(self) -> None:
+        if not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            _print_cli_help()
+            return
+
+        table = Table(show_header=True, header_style="bold #ffb000", box=None)
+        table.add_column("Command", style="bold")
+        table.add_column("Description", style="#d8b37a")
+        rows = [
+            ("/help", "Show command list"),
+            ("/session", "Show active session id"),
+            ("/provider", "Show current provider config"),
+            ("/stats", "Show current chat metrics"),
+            ("/theme", "Show active CLI theme"),
+            ("/new", "Start a new chat session"),
+            ("/setup", "Re-run setup wizard"),
+            ("/candidates", "List pending memory candidates"),
+            ("/approve <id>", "Approve candidate"),
+            ("/reject <id> [note]", "Reject candidate"),
+            ("/memories [query]", "List/search approved memories"),
+            ("/clear", "Clear terminal"),
+            ("/exit", "Quit"),
+        ]
+        for command, description in rows:
+            table.add_row(command, description)
+        self.console.print(
+            Panel(table, title="[bold #ffb000]Commands[/bold #ffb000]", border_style="#d28d00", padding=(0, 1))
+        )
+
+    def thinking(self) -> ContextManager[None]:
+        if self.interactive and RICH_AVAILABLE:
+            return self.console.status("[bold #ffb000]JUSTIN is thinking...[/bold #ffb000]", spinner="dots")
+
+        print("Justin is thinking...", file=sys.stderr, flush=True)
+        return nullcontext()
+
+    def show_assistant_message(self, content: str) -> None:
+        if not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            print(f"\nJustin> {content}\n")
+            return
+
+        self.console.print(
+            Panel(
+                Text(content),
+                title="[bold #ffb000]Justin[/bold #ffb000]",
+                border_style="#ffb000",
+                padding=(0, 1),
+            )
+        )
+
+    def show_candidates(self, candidates: list[Any]) -> None:
+        if not candidates or not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            print("candidate memories:")
+            for candidate in candidates:
+                print(f"  - {candidate.id} [{candidate.kind}] {candidate.content}")
+            return
+
+        table = Table(show_header=True, header_style="bold #ffb000", box=None)
+        table.add_column("ID", style="bold")
+        table.add_column("Kind", style="#f3c88d")
+        table.add_column("Content", style="white")
+        for candidate in candidates:
+            table.add_row(candidate.id, candidate.kind, candidate.content)
+        self.console.print(
+            Panel(table, title="[bold #ffb000]Pending Candidate Memories[/bold #ffb000]", border_style="#d28d00")
+        )
+
+    def show_info(self, message: str) -> None:
+        if self.interactive and RICH_AVAILABLE:
+            self.console.print(f"[#f3c88d]{message}[/#f3c88d]")
+        else:
+            print(message)
+
+    def show_latency(self, elapsed_seconds: float) -> None:
+        if self.interactive and RICH_AVAILABLE:
+            self.console.print(
+                f"[dim]status: responded in {elapsed_seconds:.1f}s | turns={self.metrics.turns} "
+                f"| failures={self.metrics.failures}[/dim]"
+            )
+        else:
+            print(f"Justin responded in {elapsed_seconds:.1f}s.", file=sys.stderr, flush=True)
+
+    def show_error(self, exc: Exception, elapsed_seconds: float) -> None:
+        detail = str(exc).strip() or exc.__class__.__name__
+        lowered = detail.lower()
+
+        if isinstance(exc, TimeoutError) or "timeout" in lowered or "timed out" in lowered:
+            message = (
+                f"Justin timed out after {elapsed_seconds:.1f}s waiting for the model. "
+                "Try: 1) /new for a fresh session, 2) increase JUSTIN_MODEL_TIMEOUT_SECONDS, "
+                "3) lower JUSTIN_MODEL_MAX_TOKENS, or run `Justin setup` to switch providers."
+            )
+        elif "remote end closed connection" in lowered or "connection closed by remote server" in lowered:
+            message = (
+                f"Justin request failed after {elapsed_seconds:.1f}s: remote server closed the connection. "
+                "Please retry. If this repeats, reduce JUSTIN_MODEL_MAX_TOKENS or switch model/provider."
+            )
+        else:
+            message = f"Justin request failed after {elapsed_seconds:.1f}s: {detail}"
+
+        if self.interactive and RICH_AVAILABLE:
+            self.err_console.print(
+                Panel(
+                    message,
+                    title="[bold red]Request Error[/bold red]",
+                    border_style="red",
+                    padding=(0, 1),
+                )
+            )
+        else:
+            print(message, file=sys.stderr, flush=True)
+
+    def on_turn_success(self, elapsed_seconds: float) -> None:
+        self.metrics.turns += 1
+        self.metrics.last_latency_seconds = elapsed_seconds
+        self.metrics.total_latency_seconds += elapsed_seconds
+
+    def on_turn_failure(self) -> None:
+        self.metrics.failures += 1
+
+    def show_stats(self, config: AgentConfig, session_id: str | None) -> None:
+        avg = self.metrics.avg_latency_seconds
+        if self.interactive and RICH_AVAILABLE:
+            table = Table(show_header=False, box=None)
+            table.add_row("Session", session_id or "new")
+            table.add_row("Provider", _provider_title(config))
+            table.add_row("Model", config.model_name)
+            table.add_row("Turns", str(self.metrics.turns))
+            table.add_row("Failures", str(self.metrics.failures))
+            table.add_row("Last latency", f"{self.metrics.last_latency_seconds:.1f}s")
+            table.add_row("Avg latency", f"{avg:.1f}s")
+            self.console.print(
+                Panel(table, title="[bold #ffb000]Session Stats[/bold #ffb000]", border_style="#d28d00")
+            )
+            return
+
+        print(f"session: {session_id or 'new'}")
+        print(f"provider: {_provider_title(config)}")
+        print(f"model: {config.model_name}")
+        print(f"turns: {self.metrics.turns}")
+        print(f"failures: {self.metrics.failures}")
+        print(f"last latency: {self.metrics.last_latency_seconds:.1f}s")
+        print(f"avg latency: {avg:.1f}s")
+
+    def show_theme(self) -> None:
+        self.show_info("Theme: Amber/Black with ASCII JUSTIN logo and Hermes-like 3-zone layout.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -95,79 +337,57 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | None) -> None:
+    renderer = JustinCliRenderer(interactive=message is None)
+
     if message:
-        result = _send_with_feedback(runtime, message, session_id)
+        result = _send_with_feedback(runtime, message, session_id, renderer)
         if result is None:
             return
         _print_json(to_plain_dict(result))
         return
 
-    _print_cli_banner(runtime.config)
-    _print_cli_help()
+    renderer.render_banner(runtime.config, session_id)
+    renderer.show_help()
     active_session_id = session_id
     while True:
         prompt = input("you> ").strip()
         if not prompt:
             continue
         if prompt.startswith("/"):
-            active_session_id, should_exit = _handle_slash_command(prompt, runtime, active_session_id)
+            active_session_id, should_exit = _handle_slash_command(prompt, runtime, active_session_id, renderer)
             if should_exit:
                 return
             continue
         if prompt in {"/exit", "/quit"}:
             return
-        result = _send_with_feedback(runtime, prompt, active_session_id)
+        result = _send_with_feedback(runtime, prompt, active_session_id, renderer)
         if result is None:
             continue
         active_session_id = result.session.id
-        print(f"\nJustin> {result.assistant_message.content}\n")
-        if result.candidates:
-            print("candidate memories:")
-            for candidate in result.candidates:
-                print(f"  - {candidate.id} [{candidate.kind}] {candidate.content}")
+        renderer.show_assistant_message(result.assistant_message.content)
+        renderer.show_candidates(result.candidates)
 
 
-def _send_with_feedback(runtime: JustinRuntime, content: str, session_id: str | None):
+def _send_with_feedback(
+    runtime: JustinRuntime,
+    content: str,
+    session_id: str | None,
+    renderer: JustinCliRenderer,
+):
     started_at = time.perf_counter()
-    print("Justin is thinking...", file=sys.stderr, flush=True)
-    try:
-        result = runtime.send_message(content=content, session_id=session_id)
-    except Exception as exc:  # keep CLI stable and show user-facing errors.
-        elapsed = time.perf_counter() - started_at
-        _print_runtime_error(exc, elapsed)
-        return None
+    with renderer.thinking():
+        try:
+            result = runtime.send_message(content=content, session_id=session_id)
+        except Exception as exc:  # keep CLI stable and show user-facing errors.
+            elapsed = time.perf_counter() - started_at
+            renderer.on_turn_failure()
+            renderer.show_error(exc, elapsed)
+            return None
 
     elapsed = time.perf_counter() - started_at
-    print(f"Justin responded in {elapsed:.1f}s.", file=sys.stderr, flush=True)
+    renderer.on_turn_success(elapsed)
+    renderer.show_latency(elapsed)
     return result
-
-
-def _print_runtime_error(exc: Exception, elapsed_seconds: float) -> None:
-    detail = str(exc).strip() or exc.__class__.__name__
-    lowered = detail.lower()
-    if isinstance(exc, TimeoutError) or "timeout" in lowered or "timed out" in lowered:
-        print(
-            f"Justin timed out after {elapsed_seconds:.1f}s waiting for the model. "
-            "Try: 1) /new for a fresh session, 2) increase JUSTIN_MODEL_TIMEOUT_SECONDS, "
-            "3) lower JUSTIN_MODEL_MAX_TOKENS, or run `Justin setup` to switch providers.",
-            file=sys.stderr,
-            flush=True,
-        )
-        return
-    if "remote end closed connection" in lowered or "connection closed by remote server" in lowered:
-        print(
-            f"Justin request failed after {elapsed_seconds:.1f}s: remote server closed the connection. "
-            "Please retry. If this repeats, reduce JUSTIN_MODEL_MAX_TOKENS or switch model/provider.",
-            file=sys.stderr,
-            flush=True,
-        )
-        return
-
-    print(
-        f"Justin request failed after {elapsed_seconds:.1f}s: {detail}",
-        file=sys.stderr,
-        flush=True,
-    )
 
 
 def _run_candidate_commands(runtime: JustinRuntime, args: argparse.Namespace) -> None:
@@ -310,25 +530,14 @@ def _print_provider_summary(config: AgentConfig) -> None:
         print(f"API base: {config.api_base}")
 
 
-def _print_cli_banner(config: AgentConfig) -> None:
-    title = "Justin CLI"
-    line = "=" * 64
-    print(line)
-    print(f"{title:^64}")
-    print(line)
-    print(f"provider: {_provider_title(config)}")
-    print(f"model:    {config.model_name}")
-    if config.api_base:
-        print(f"api base: {config.api_base}")
-    print(line)
-
-
 def _print_cli_help() -> None:
     print("Commands:")
     print("  /help                  Show command list")
     print("  /session               Show active session id")
     print("  /provider              Show current provider config")
-    print("  /new                   Start a new chat session")
+    print("  /stats                 Show current chat metrics")
+    print("  /theme                 Show current CLI theme")
+    print("  /new                   Start a new session")
     print("  /setup                 Re-run setup wizard")
     print("  /candidates            List pending memory candidates")
     print("  /approve <id>          Approve a candidate")
@@ -342,6 +551,7 @@ def _handle_slash_command(
     raw_command: str,
     runtime: JustinRuntime,
     active_session_id: str | None,
+    renderer: JustinCliRenderer,
 ) -> tuple[str | None, bool]:
     tokens = raw_command.split()
     command = tokens[0].lower()
@@ -349,65 +559,74 @@ def _handle_slash_command(
     if command in {"/exit", "/quit"}:
         return active_session_id, True
     if command == "/help":
-        _print_cli_help()
+        renderer.show_help()
         return active_session_id, False
     if command == "/clear":
         os.system("cls" if os.name == "nt" else "clear")
-        _print_cli_banner(runtime.config)
+        renderer.render_banner(runtime.config, active_session_id)
         return active_session_id, False
     if command == "/session":
-        print(f"active session: {active_session_id or '(new session on next message)'}")
+        renderer.show_info(f"active session: {active_session_id or '(new session on next message)'}")
         return active_session_id, False
     if command == "/provider":
-        _print_provider_summary(runtime.config)
+        renderer.show_info(f"Provider: {_provider_title(runtime.config)}")
+        renderer.show_info(f"Model: {runtime.config.model_name}")
+        if runtime.config.api_base:
+            renderer.show_info(f"API base: {runtime.config.api_base}")
+        return active_session_id, False
+    if command == "/stats":
+        renderer.show_stats(runtime.config, active_session_id)
+        return active_session_id, False
+    if command == "/theme":
+        renderer.show_theme()
         return active_session_id, False
     if command == "/new":
-        print("Started a new session.")
+        renderer.show_info("Started a new session.")
         return None, False
     if command == "/setup":
         updated = run_setup_wizard(runtime.config)
         runtime.apply_config(updated)
-        print("Runtime provider config reloaded.")
+        renderer.show_info("Runtime provider config reloaded.")
         return active_session_id, False
     if command == "/candidates":
         items = runtime.list_candidates(status="pending")
         if not items:
-            print("No pending candidates.")
+            renderer.show_info("No pending candidates.")
             return active_session_id, False
         for item in items[:20]:
-            print(f"- {item.id} [{item.kind}] {item.content}")
+            renderer.show_info(f"- {item.id} [{item.kind}] {item.content}")
         return active_session_id, False
     if command == "/approve":
         if len(tokens) < 2:
-            print("usage: /approve <candidate-id>")
+            renderer.show_info("usage: /approve <candidate-id>")
             return active_session_id, False
         try:
             memory = runtime.confirm_candidate(tokens[1])
-            print(f"approved -> memory {memory.id}")
+            renderer.show_info(f"approved -> memory {memory.id}")
         except KeyError as exc:
-            print(str(exc))
+            renderer.show_info(str(exc))
         return active_session_id, False
     if command == "/reject":
         if len(tokens) < 2:
-            print("usage: /reject <candidate-id> [note]")
+            renderer.show_info("usage: /reject <candidate-id> [note]")
             return active_session_id, False
         note = " ".join(tokens[2:]) if len(tokens) > 2 else None
         try:
             runtime.reject_candidate(tokens[1], note)
-            print("candidate rejected.")
+            renderer.show_info("candidate rejected.")
         except KeyError as exc:
-            print(str(exc))
+            renderer.show_info(str(exc))
         return active_session_id, False
     if command == "/memories":
         query = " ".join(tokens[1:]).strip()
         items = runtime.search_memories(query) if query else runtime.list_memories()
         if not items:
-            print("No memories found.")
+            renderer.show_info("No memories found.")
             return active_session_id, False
         for item in items[:20]:
             score = f" score={item.score:.2f}" if hasattr(item, "score") else ""
-            print(f"- {item.id} [{item.kind}]{score} {item.content}")
+            renderer.show_info(f"- {item.id} [{item.kind}]{score} {item.content}")
         return active_session_id, False
 
-    print(f"Unknown command: {raw_command}. Type /help.")
+    renderer.show_info(f"Unknown command: {raw_command}. Type /help.")
     return active_session_id, False

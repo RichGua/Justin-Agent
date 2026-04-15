@@ -202,11 +202,18 @@ python scripts/check_secrets.py --staged
 ```bash
 Justin
 Justin chat --message "remember I prefer concise output"
+Justin chat --session <session-id>
 Justin candidate list
 Justin candidate confirm <candidate-id>
 Justin candidate reject <candidate-id> --note "not stable enough"
 Justin memory list
 Justin memory search "concise output"
+```
+
+Interactive slash commands:
+
+```text
+/help /session /provider /stats /theme /new /setup /candidates /approve /reject /memories /clear /exit
 ```
 
 ### Notes
