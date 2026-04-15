@@ -50,6 +50,17 @@ JUSTIN_ASCII_LOGO = r"""
   \___/ \___/ |____/ |_| |___|_| \_|
 """
 
+JUSTIN_SOLID_LOGO = "\n".join(
+    [
+        "     ██╗██╗   ██╗███████╗████████╗██╗███╗   ██╗",
+        "     ██║██║   ██║██╔════╝╚══██╔══╝██║████╗  ██║",
+        "     ██║██║   ██║███████╗   ██║   ██║██╔██╗ ██║",
+        "██   ██║██║   ██║╚════██║   ██║   ██║██║╚██╗██║",
+        "╚█████╔╝╚██████╔╝███████║   ██║   ██║██║ ╚████║",
+        " ╚════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═══╝",
+    ]
+)
+
 
 @dataclass(slots=True)
 class CliMetrics:
@@ -90,7 +101,8 @@ class JustinCliRenderer:
             print(line)
             return
 
-        logo = Text(JUSTIN_ASCII_LOGO.strip("\n"), style="bold #ffb000")
+        panel_width = self._panel_width()
+        logo = Text(JUSTIN_SOLID_LOGO, style="bold #ffb000")
         meta = Table.grid(padding=(0, 2))
         meta.add_row("Provider", f"[bold]{_provider_title(config)}[/bold]")
         meta.add_row("Model", config.model_name)
@@ -101,15 +113,16 @@ class JustinCliRenderer:
 
         header = Group(
             logo,
-            Text("-" * 45, style="#7f4d00"),
+            Text("-" * max(18, panel_width - 8), style="#7f4d00"),
             meta,
         )
         self.console.print(
-            Panel.fit(
+            Panel(
                 header,
                 title="[bold #ffb000]JUSTIN CLI[/bold #ffb000]",
                 border_style="#ffb000",
                 padding=(1, 2),
+                width=panel_width,
             )
         )
 
@@ -120,7 +133,8 @@ class JustinCliRenderer:
             _print_cli_help()
             return
 
-        table = Table(show_header=True, header_style="bold #ffb000", box=None)
+        panel_width = self._panel_width()
+        table = Table(show_header=True, header_style="bold #ffb000", box=None, expand=True)
         table.add_column("Command", style="bold")
         table.add_column("Description", style="#d8b37a")
         rows = [
@@ -141,7 +155,13 @@ class JustinCliRenderer:
         for command, description in rows:
             table.add_row(command, description)
         self.console.print(
-            Panel(table, title="[bold #ffb000]Commands[/bold #ffb000]", border_style="#d28d00", padding=(0, 1))
+            Panel(
+                table,
+                title="[bold #ffb000]Commands[/bold #ffb000]",
+                border_style="#d28d00",
+                padding=(0, 1),
+                width=panel_width,
+            )
         )
 
     def thinking(self) -> ContextManager[None]:
@@ -242,7 +262,7 @@ class JustinCliRenderer:
     def show_stats(self, config: AgentConfig, session_id: str | None) -> None:
         avg = self.metrics.avg_latency_seconds
         if self.interactive and RICH_AVAILABLE:
-            table = Table(show_header=False, box=None)
+            table = Table(show_header=False, box=None, expand=True)
             table.add_row("Session", session_id or "new")
             table.add_row("Provider", _provider_title(config))
             table.add_row("Model", config.model_name)
@@ -251,7 +271,12 @@ class JustinCliRenderer:
             table.add_row("Last latency", f"{self.metrics.last_latency_seconds:.1f}s")
             table.add_row("Avg latency", f"{avg:.1f}s")
             self.console.print(
-                Panel(table, title="[bold #ffb000]Session Stats[/bold #ffb000]", border_style="#d28d00")
+                Panel(
+                    table,
+                    title="[bold #ffb000]Session Stats[/bold #ffb000]",
+                    border_style="#d28d00",
+                    width=self._panel_width(),
+                )
             )
             return
 
@@ -264,7 +289,13 @@ class JustinCliRenderer:
         print(f"avg latency: {avg:.1f}s")
 
     def show_theme(self) -> None:
-        self.show_info("Theme: Amber/Black with ASCII JUSTIN logo and Hermes-like 3-zone layout.")
+        self.show_info("Theme: Amber/Black with solid JUSTIN logo and aligned Hermes-like panels.")
+
+    def _panel_width(self) -> int:
+        if not RICH_AVAILABLE:
+            return 72
+        available = max(self.console.width - 2, 40)
+        return min(available, 88)
 
 
 def build_parser() -> argparse.ArgumentParser:
