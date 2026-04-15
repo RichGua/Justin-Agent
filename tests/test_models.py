@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import unittest
 from unittest.mock import patch
@@ -113,6 +114,90 @@ class ModelParsingTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(calls[0]["max_tokens"], 64)
         self.assertGreater(calls[1]["max_tokens"], calls[0]["max_tokens"])
+
+    def test_generate_retries_with_lower_max_tokens_on_timeout(self) -> None:
+        provider = OpenAICompatibleChatProvider(
+            model_name="z-ai/glm4.7",
+            api_base="https://integrate.api.nvidia.com/v1",
+            api_key="your_api_key_here",
+            max_tokens=1024,
+            timeout_seconds=60,
+        )
+        request_payload = ChatRequest(
+            system_prompt="You are Justin.",
+            conversation=[
+                {"role": "user", "content": "msg-1"},
+                {"role": "assistant", "content": "msg-2"},
+                {"role": "user", "content": "msg-3"},
+            ],
+            memory_snippets=[],
+            latest_user_message="msg-3",
+        )
+
+        calls: list[tuple[int, int]] = []
+        ok_response = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "ok",
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+
+        def _fake_urlopen(http_request, timeout=0):
+            request_json = json.loads(http_request.data.decode("utf-8"))
+            calls.append((int(request_json.get("max_tokens", 0)), int(timeout)))
+            if len(calls) == 1:
+                raise TimeoutError("The read operation timed out")
+            return _FakeHTTPResponse(ok_response)
+
+        with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
+            text = provider.generate(request_payload)
+
+        self.assertEqual(text, "ok")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][0], 1024)
+        self.assertEqual(calls[1][0], 512)
+        self.assertGreater(calls[0][1], 60)
+
+    def test_generate_retries_once_on_remote_disconnect(self) -> None:
+        provider = OpenAICompatibleChatProvider(
+            model_name="z-ai/glm4.7",
+            api_base="https://integrate.api.nvidia.com/v1",
+            api_key="your_api_key_here",
+            max_tokens=512,
+        )
+        request_payload = ChatRequest(
+            system_prompt="You are Justin.",
+            conversation=[{"role": "user", "content": "hello"}],
+            memory_snippets=[],
+            latest_user_message="hello",
+        )
+
+        calls: list[int] = []
+        ok_response = {
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "hello"},
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+
+        def _fake_urlopen(http_request, timeout=0):
+            calls.append(timeout)
+            if len(calls) == 1:
+                raise http.client.RemoteDisconnected("Remote end closed connection without response")
+            return _FakeHTTPResponse(ok_response)
+
+        with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
+            text = provider.generate(request_payload)
+
+        self.assertEqual(text, "hello")
+        self.assertEqual(len(calls), 2)
 
 
 if __name__ == "__main__":

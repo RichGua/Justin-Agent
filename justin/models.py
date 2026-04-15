@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import http.client
 import json
+import time
 from dataclasses import dataclass
 from urllib import error, request
 
@@ -61,12 +63,30 @@ class OpenAICompatibleChatProvider(ChatProvider):
 
     def generate(self, payload: ChatRequest) -> str:
         messages = [{"role": "system", "content": payload.system_prompt}, *payload.conversation]
-        payload_json = self._request_chat_completion(messages=messages, max_tokens=self.max_tokens)
+        payload_json = self._request_with_timeout_fallback(messages=messages, max_tokens=self.max_tokens)
         if self._should_retry_for_length(payload_json):
             retry_tokens = self._next_retry_max_tokens(self.max_tokens)
-            payload_json = self._request_chat_completion(messages=messages, max_tokens=retry_tokens)
+            payload_json = self._request_with_timeout_fallback(messages=messages, max_tokens=retry_tokens)
 
         return self._extract_response_text(payload_json)
+
+    def _request_with_timeout_fallback(self, messages: list[dict[str, str]], max_tokens: int) -> dict:
+        try:
+            return self._request_chat_completion(messages=messages, max_tokens=max_tokens)
+        except RuntimeError as exc:
+            if not self._is_timeout_error(exc):
+                if self._is_transient_network_error(exc):
+                    time.sleep(0.25)
+                    return self._request_chat_completion(messages=messages, max_tokens=max_tokens)
+                raise
+            fallback_tokens = self._fallback_max_tokens_on_timeout(max_tokens)
+            if fallback_tokens >= max_tokens:
+                if self._is_transient_network_error(exc):
+                    time.sleep(0.25)
+                    return self._request_chat_completion(messages=messages, max_tokens=max_tokens)
+                raise
+            time.sleep(0.25)
+            return self._request_chat_completion(messages=messages, max_tokens=fallback_tokens)
 
     def _request_chat_completion(self, messages: list[dict[str, str]], max_tokens: int) -> dict:
         body_obj: dict[str, object] = {
@@ -91,17 +111,47 @@ class OpenAICompatibleChatProvider(ChatProvider):
             headers=headers,
             method="POST",
         )
+        timeout = self._compute_timeout_seconds(messages)
         try:
-            timeout = max(int(self.timeout_seconds), 1)
             with request.urlopen(http_request, timeout=timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except TimeoutError as exc:
-            raise RuntimeError(self._timeout_message()) from exc
+            raise RuntimeError(self._timeout_message(timeout)) from exc
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Model request failed with HTTP {exc.code}: {detail}") from exc
+        except http.client.RemoteDisconnected as exc:
+            raise RuntimeError("Model connection closed by remote server before response.") from exc
         except error.URLError as exc:
             raise RuntimeError(self._format_network_error(exc)) from exc
+
+    def _compute_timeout_seconds(self, messages: list[dict[str, str]]) -> int:
+        base = max(int(self.timeout_seconds), 1)
+        # Multi-turn sessions usually carry more context and can take longer.
+        extra = max(len(messages) - 2, 0) * 8
+        return base + min(extra, 120)
+
+    def _fallback_max_tokens_on_timeout(self, current_tokens: int) -> int:
+        current = max(int(current_tokens), 1)
+        if current <= 256:
+            return current
+        return max(256, current // 2)
+
+    def _is_timeout_error(self, exc: Exception) -> bool:
+        lowered = str(exc).lower()
+        return "timeout" in lowered or "timed out" in lowered
+
+    def _is_transient_network_error(self, exc: Exception) -> bool:
+        lowered = str(exc).lower()
+        markers = (
+            "remote end closed connection",
+            "connection closed by remote server",
+            "tls handshake failed",
+            "unexpected eof while reading",
+            "connection reset",
+            "temporarily unavailable",
+        )
+        return any(marker in lowered for marker in markers)
 
     def _should_retry_for_length(self, payload_json: dict) -> bool:
         if self.retry_max_tokens <= 0:
@@ -157,9 +207,10 @@ class OpenAICompatibleChatProvider(ChatProvider):
 
         return f"Model request failed: {reason_text}"
 
-    def _timeout_message(self) -> str:
+    def _timeout_message(self, timeout_seconds: int | None = None) -> str:
+        effective_timeout = timeout_seconds if timeout_seconds is not None else max(int(self.timeout_seconds), 1)
         return (
-            f"Model request timed out after {max(int(self.timeout_seconds), 1)} seconds. "
+            f"Model request timed out after {effective_timeout} seconds. "
             "Provider/network may be slow or blocked. Check API settings and retry."
         )
 

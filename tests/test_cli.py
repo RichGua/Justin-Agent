@@ -64,6 +64,20 @@ class CLITests(unittest.TestCase):
         output = stderr.getvalue()
         self.assertIn("Justin is thinking...", output)
         self.assertIn("timed out", output.lower())
+        self.assertIn("/new", output)
+
+    def test_run_chat_prints_remote_disconnect_hint(self) -> None:
+        runtime = MagicMock()
+        runtime.send_message.side_effect = RuntimeError("Remote end closed connection without response")
+
+        with (
+            patch("sys.stderr", new=io.StringIO()) as stderr,
+            patch("sys.stdout", new=io.StringIO()),
+        ):
+            _run_chat(runtime, None, "hello")
+
+        output = stderr.getvalue().lower()
+        self.assertIn("remote server closed the connection", output)
 
 
 if __name__ == "__main__":

@@ -148,7 +148,16 @@ def _print_runtime_error(exc: Exception, elapsed_seconds: float) -> None:
     if isinstance(exc, TimeoutError) or "timeout" in lowered or "timed out" in lowered:
         print(
             f"Justin timed out after {elapsed_seconds:.1f}s waiting for the model. "
-            "Check provider/network health, then retry or run `Justin setup` to switch providers.",
+            "Try: 1) /new for a fresh session, 2) increase JUSTIN_MODEL_TIMEOUT_SECONDS, "
+            "3) lower JUSTIN_MODEL_MAX_TOKENS, or run `Justin setup` to switch providers.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return
+    if "remote end closed connection" in lowered or "connection closed by remote server" in lowered:
+        print(
+            f"Justin request failed after {elapsed_seconds:.1f}s: remote server closed the connection. "
+            "Please retry. If this repeats, reduce JUSTIN_MODEL_MAX_TOKENS or switch model/provider.",
             file=sys.stderr,
             flush=True,
         )
@@ -319,6 +328,7 @@ def _print_cli_help() -> None:
     print("  /help                  Show command list")
     print("  /session               Show active session id")
     print("  /provider              Show current provider config")
+    print("  /new                   Start a new chat session")
     print("  /setup                 Re-run setup wizard")
     print("  /candidates            List pending memory candidates")
     print("  /approve <id>          Approve a candidate")
@@ -351,6 +361,9 @@ def _handle_slash_command(
     if command == "/provider":
         _print_provider_summary(runtime.config)
         return active_session_id, False
+    if command == "/new":
+        print("Started a new session.")
+        return None, False
     if command == "/setup":
         updated = run_setup_wizard(runtime.config)
         runtime.apply_config(updated)
