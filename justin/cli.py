@@ -5,13 +5,13 @@ import json
 import sys
 
 from .config import AgentConfig
-from .runtime import PersonalAgentRuntime, build_runtime_bundle
+from .runtime import JustinRuntime, build_runtime_bundle
 from .server import serve
 from .types import to_plain_dict
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Justin: a local-first personal agent.")
+    parser = argparse.ArgumentParser(description="Justin: a local-first agent.")
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     subparsers.add_parser("serve", help="Run the HTTP server and Web UI.")
@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     bundle = build_runtime_bundle(AgentConfig.from_env())
-    runtime = PersonalAgentRuntime(bundle)
+    runtime = JustinRuntime(bundle)
     try:
         match args.command:
             case "chat":
@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
         runtime.close()
 
 
-def _run_chat(runtime: PersonalAgentRuntime, session_id: str | None, message: str | None) -> None:
+def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | None) -> None:
     if message:
         result = runtime.send_message(content=message, session_id=session_id)
         _print_json(to_plain_dict(result))
@@ -91,7 +91,7 @@ def _run_chat(runtime: PersonalAgentRuntime, session_id: str | None, message: st
                 print(f"  - {candidate.id} [{candidate.kind}] {candidate.content}")
 
 
-def _run_candidate_commands(runtime: PersonalAgentRuntime, args: argparse.Namespace) -> None:
+def _run_candidate_commands(runtime: JustinRuntime, args: argparse.Namespace) -> None:
     match args.candidate_command:
         case "list":
             _print_json([to_plain_dict(item) for item in runtime.list_candidates()])
@@ -101,7 +101,7 @@ def _run_candidate_commands(runtime: PersonalAgentRuntime, args: argparse.Namesp
             _print_json(to_plain_dict(runtime.reject_candidate(args.candidate_id, args.note)))
 
 
-def _run_memory_commands(runtime: PersonalAgentRuntime, args: argparse.Namespace) -> None:
+def _run_memory_commands(runtime: JustinRuntime, args: argparse.Namespace) -> None:
     match args.memory_command:
         case "list":
             _print_json([to_plain_dict(item) for item in runtime.list_memories()])

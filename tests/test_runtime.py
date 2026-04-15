@@ -5,8 +5,8 @@ import uuid
 from pathlib import Path
 from shutil import rmtree
 
-from personal_agent.config import AgentConfig
-from personal_agent.runtime import PersonalAgentRuntime, build_runtime_bundle
+from justin.config import AgentConfig
+from justin.runtime import JustinRuntime, build_runtime_bundle
 
 
 class RuntimeTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class RuntimeTests(unittest.TestCase):
             database_path=self.temp_dir / "agent.db",
         )
         bundle = build_runtime_bundle(config)
-        self.runtime = PersonalAgentRuntime(bundle)
+        self.runtime = JustinRuntime(bundle)
 
     def tearDown(self) -> None:
         self.runtime.close()

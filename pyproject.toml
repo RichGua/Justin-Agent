@@ -3,18 +3,17 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "personal-agent"
+name = "justin-agent"
 version = "0.1.0"
-description = "A local-first personal agent with memory review, retrieval, CLI, and Web UI."
+description = "Justin: a local-first agent with memory review, retrieval, CLI, and Web UI."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Codex" }]
 dependencies = []
 
 [project.scripts]
-Justin = "personal_agent.cli:main"
-justin = "personal_agent.cli:main"
-personal-agent = "personal_agent.cli:main"
+Justin = "justin.cli:main"
+justin = "justin.cli:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -23,4 +22,4 @@ include-package-data = true
 where = ["."]
 
 [tool.setuptools.package-data]
-personal_agent = ["web/*"]
+justin = ["web/*"]

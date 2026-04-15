@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from personal_agent.cli import main
+from justin.cli import main
 
 
 class CLITests(unittest.TestCase):
@@ -11,10 +11,10 @@ class CLITests(unittest.TestCase):
         runtime = MagicMock()
 
         with (
-            patch("personal_agent.cli.AgentConfig.from_env", return_value=object()),
-            patch("personal_agent.cli.build_runtime_bundle", return_value=object()),
-            patch("personal_agent.cli.PersonalAgentRuntime", return_value=runtime),
-            patch("personal_agent.cli._run_chat") as run_chat,
+            patch("justin.cli.AgentConfig.from_env", return_value=object()),
+            patch("justin.cli.build_runtime_bundle", return_value=object()),
+            patch("justin.cli.JustinRuntime", return_value=runtime),
+            patch("justin.cli._run_chat") as run_chat,
         ):
             main([])
 

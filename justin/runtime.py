@@ -27,7 +27,7 @@ def build_runtime_bundle(config: AgentConfig | None = None) -> RuntimeBundle:
 
     if config.model_provider == "openai-compatible":
         if not (config.api_base and config.api_key):
-            raise RuntimeError("OpenAI-compatible provider requires PERSONAL_AGENT_API_BASE and PERSONAL_AGENT_API_KEY.")
+            raise RuntimeError("OpenAI-compatible provider requires JUSTIN_API_BASE and JUSTIN_API_KEY.")
         chat_provider: ChatProvider = OpenAICompatibleChatProvider(
             model_name=config.model_name,
             api_base=config.api_base,
@@ -39,7 +39,7 @@ def build_runtime_bundle(config: AgentConfig | None = None) -> RuntimeBundle:
     return RuntimeBundle(config=config, store=store, extractor=extractor, chat_provider=chat_provider)
 
 
-class PersonalAgentRuntime:
+class JustinRuntime:
     def __init__(self, bundle: RuntimeBundle) -> None:
         self.config = bundle.config
         self.store = bundle.store
@@ -125,7 +125,7 @@ class PersonalAgentRuntime:
     def _build_system_prompt(self, recalled_memories) -> str:
         memory_block = "\n".join(f"- {memory.content}" for memory in recalled_memories[:5]) or "- none"
         return (
-            "You are a local-first personal agent.\n"
+            "You are Justin, a local-first agent.\n"
             "Use recalled memories only as helpful background, not as unquestionable truth.\n"
             "Never claim that unapproved candidate memories are confirmed facts.\n"
             "Prefer concise, practical answers.\n"

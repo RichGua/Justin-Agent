@@ -50,7 +50,7 @@ This is the first usable release of `Justin-Agent`. The current version focuses 
 
 ### Included in this release
 
-- Local-first personal agent foundation
+- Local-first Justin foundation
 - SQLite-backed session and long-term memory persistence
 - Candidate-memory review workflow
 - Hybrid retrieval over approved memories

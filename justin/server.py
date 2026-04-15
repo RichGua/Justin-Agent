@@ -6,15 +6,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .runtime import PersonalAgentRuntime, build_runtime_bundle
+from .runtime import JustinRuntime, build_runtime_bundle
 from .types import to_plain_dict
 
 
-def build_server(runtime: PersonalAgentRuntime, host: str, port: int) -> ThreadingHTTPServer:
+def build_server(runtime: JustinRuntime, host: str, port: int) -> ThreadingHTTPServer:
     web_dir = Path(__file__).with_name("web")
 
     class AgentRequestHandler(BaseHTTPRequestHandler):
-        server_version = "PersonalAgent/0.1"
+        server_version = "Justin/0.1"
 
         def do_GET(self) -> None:  # noqa: N802
             try:
@@ -146,9 +146,9 @@ def build_server(runtime: PersonalAgentRuntime, host: str, port: int) -> Threadi
 
 def serve() -> None:
     bundle = build_runtime_bundle()
-    runtime = PersonalAgentRuntime(bundle)
+    runtime = JustinRuntime(bundle)
     server = build_server(runtime, bundle.config.host, bundle.config.port)
-    print(f"Personal Agent listening on http://{bundle.config.host}:{bundle.config.port}")
+    print(f"Justin listening on http://{bundle.config.host}:{bundle.config.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

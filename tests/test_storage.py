@@ -5,8 +5,8 @@ import uuid
 from pathlib import Path
 from shutil import rmtree
 
-from personal_agent.embeddings import LocalHashEmbeddingProvider
-from personal_agent.storage import AgentStore
+from justin.embeddings import LocalHashEmbeddingProvider
+from justin.storage import AgentStore
 
 
 class StorageTests(unittest.TestCase):
