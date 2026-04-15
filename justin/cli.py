@@ -61,6 +61,15 @@ JUSTIN_SOLID_LOGO = "\n".join(
     ]
 )
 
+JUSTIN_GRADIENT_LOGO_LINES = [
+    "      ██╗██╗   ██╗███████╗████████╗██╗███╗   ██╗",
+    "      ██║██║   ██║██╔════╝╚══██╔══╝██║████╗  ██║",
+    "      ██║██║   ██║███████╗   ██║   ██║██╔██╗ ██║",
+    " ██   ██║██║   ██║╚════██║   ██║   ██║██║╚██╗██║",
+    " ╚█████╔╝╚██████╔╝███████║   ██║   ██║██║ ╚████║",
+    "  ╚════╝  ╚═════╝ ╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═══╝",
+]
+
 
 @dataclass(slots=True)
 class CliMetrics:
@@ -102,7 +111,7 @@ class JustinCliRenderer:
             return
 
         panel_width = self._panel_width()
-        logo = Text(JUSTIN_SOLID_LOGO, style="bold #ffb000")
+        logo = self._build_logo()
         meta = Table.grid(padding=(0, 2))
         meta.add_row("Provider", f"[bold]{_provider_title(config)}[/bold]")
         meta.add_row("Model", config.model_name)
@@ -289,7 +298,29 @@ class JustinCliRenderer:
         print(f"avg latency: {avg:.1f}s")
 
     def show_theme(self) -> None:
-        self.show_info("Theme: Amber/Black with solid JUSTIN logo and aligned Hermes-like panels.")
+        self.show_info("Theme: Amber/Black with 3-band gradient JUSTIN logo and aligned Hermes-like panels.")
+
+    def _build_logo(self):
+        if not RICH_AVAILABLE:
+            return Text("\n".join(JUSTIN_GRADIENT_LOGO_LINES))
+
+        logo = Text()
+        palette = (
+            "#ffe18f",
+            "#ffd56f",
+            "#ffc24c",
+            "#ffaf30",
+            "#ea8b15",
+            "#c8680f",
+        )
+        for index, line in enumerate(JUSTIN_GRADIENT_LOGO_LINES):
+            logo.append(line, style=f"bold {palette[index]}")
+            if index < len(JUSTIN_GRADIENT_LOGO_LINES) - 1:
+                logo.append("\n")
+
+        shadow_width = max(18, len(JUSTIN_GRADIENT_LOGO_LINES[-1].strip()) - 2)
+        shadow = Text("   " + ("▄" * shadow_width), style="dim #4a2500")
+        return Group(logo, shadow)
 
     def _panel_width(self) -> int:
         if not RICH_AVAILABLE:
