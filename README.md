@@ -49,7 +49,13 @@ Open `http://127.0.0.1:8765`.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
-personal-agent serve
+Justin
+```
+
+This opens the interactive CLI directly. To start the local dashboard:
+
+```bash
+Justin serve
 ```
 
 ### Configuration
@@ -77,13 +83,13 @@ personal-agent serve
 ### CLI Usage
 
 ```bash
-personal-agent chat
-personal-agent chat --message "remember I prefer concise output"
-personal-agent candidate list
-personal-agent candidate confirm <candidate-id>
-personal-agent candidate reject <candidate-id> --note "not stable enough"
-personal-agent memory list
-personal-agent memory search "concise output"
+Justin
+Justin chat --message "remember I prefer concise output"
+Justin candidate list
+Justin candidate confirm <candidate-id>
+Justin candidate reject <candidate-id> --note "not stable enough"
+Justin memory list
+Justin memory search "concise output"
 ```
 
 ### Notes
@@ -137,7 +143,13 @@ python -m personal_agent serve
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
-personal-agent serve
+Justin
+```
+
+这会直接进入交互式 CLI。如果要启动本地 Web 面板：
+
+```bash
+Justin serve
 ```
 
 ### 配置说明
@@ -165,13 +177,13 @@ personal-agent serve
 ### CLI 示例
 
 ```bash
-personal-agent chat
-personal-agent chat --message "记住我偏好简洁输出"
-personal-agent candidate list
-personal-agent candidate confirm <candidate-id>
-personal-agent candidate reject <candidate-id> --note "这条还不够稳定"
-personal-agent memory list
-personal-agent memory search "简洁 输出"
+Justin
+Justin chat --message "记住我偏好简洁输出"
+Justin candidate list
+Justin candidate confirm <candidate-id>
+Justin candidate reject <candidate-id> --note "这条还不够稳定"
+Justin memory list
+Justin memory search "简洁 输出"
 ```
 
 ### 说明

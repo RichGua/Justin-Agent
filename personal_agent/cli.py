@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from .config import AgentConfig
 from .runtime import PersonalAgentRuntime, build_runtime_bundle
@@ -10,8 +11,8 @@ from .types import to_plain_dict
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Local-first personal agent.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(description="Justin: a local-first personal agent.")
+    subparsers = parser.add_subparsers(dest="command", required=False)
 
     subparsers.add_parser("serve", help="Run the HTTP server and Web UI.")
 
@@ -41,8 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None) -> None:
+    argv = list(argv) if argv is not None else sys.argv[1:]
+    if not argv:
+        argv = ["chat"]
+
+    args = build_parser().parse_args(argv)
     if args.command == "serve":
         serve()
         return
@@ -69,7 +74,7 @@ def _run_chat(runtime: PersonalAgentRuntime, session_id: str | None, message: st
         _print_json(to_plain_dict(result))
         return
 
-    print("Interactive mode. Type /exit to quit.")
+    print("Justin CLI. Type /exit to quit.")
     active_session_id = session_id
     while True:
         prompt = input("you> ").strip()
@@ -79,7 +84,7 @@ def _run_chat(runtime: PersonalAgentRuntime, session_id: str | None, message: st
             return
         result = runtime.send_message(content=prompt, session_id=active_session_id)
         active_session_id = result.session.id
-        print(f"agent> {result.assistant_message.content}")
+        print(f"Justin> {result.assistant_message.content}")
         if result.candidates:
             print("candidate memories:")
             for candidate in result.candidates:
