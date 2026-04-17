@@ -17,8 +17,17 @@ from .config import (
     PROVIDER_OPENAI,
 )
 from .runtime import JustinRuntime, build_runtime_bundle
-from .server import serve
 from .types import to_plain_dict
+
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.formatted_text import HTML
+    PROMPT_TOOLKIT_AVAILABLE = True
+except ModuleNotFoundError:
+    PROMPT_TOOLKIT_AVAILABLE = False
 
 try:  # Optional UX dependency; CLI still works without Rich installed.
     from rich.console import Console, Group
@@ -404,7 +413,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Justin: a local-first agent.")
     subparsers = parser.add_subparsers(dest="command", required=False)
 
-    subparsers.add_parser("serve", help="Run the HTTP server and Web UI.")
     subparsers.add_parser("setup", help="Run first-time provider/API setup wizard.")
 
     chat_parser = subparsers.add_parser("chat", help="Chat in one-off or interactive mode.")
@@ -449,10 +457,6 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "chat" and args.message is None:
         config = _maybe_prompt_first_run_setup(config)
 
-    if args.command == "serve":
-        serve(config)
-        return
-
     bundle = build_runtime_bundle(config)
     runtime = JustinRuntime(bundle)
     try:
@@ -469,6 +473,25 @@ def main(argv: list[str] | None = None) -> None:
         runtime.close()
 
 
+def _get_prompt_session(runtime: JustinRuntime) -> Any:
+    if not PROMPT_TOOLKIT_AVAILABLE:
+        return None
+    history_file = runtime.config.settings_path.parent / ".cli_history"
+    bindings = KeyBindings()
+
+    @bindings.add("escape", "enter")
+    @bindings.add("c-j") # Some terminals send ctrl-j for alt-enter
+    def _(event):
+        event.current_buffer.insert_text("\n")
+
+    return PromptSession(
+        history=FileHistory(str(history_file)),
+        auto_suggest=AutoSuggestFromHistory(),
+        key_bindings=bindings,
+        multiline=True,
+        prompt_continuation=lambda width, line_number, is_soft_wrap: "." * (width - 1) + " ",
+    )
+
 def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | None) -> None:
     renderer = JustinCliRenderer(interactive=message is None)
 
@@ -482,8 +505,20 @@ def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | Non
     renderer.render_banner(runtime.config, session_id)
     renderer.show_help()
     active_session_id = session_id
+
+    pt_session = _get_prompt_session(runtime)
+    if pt_session:
+        print("Tip: Press Alt+Enter or Ctrl+J to insert a newline. Press Enter to submit.")
+
     while True:
-        prompt = input("you> ").strip()
+        try:
+            if pt_session:
+                prompt = pt_session.prompt(HTML("<b><ansigreen>you></ansigreen></b> ")).strip()
+            else:
+                prompt = input("you> ").strip()
+        except (KeyboardInterrupt, EOFError):
+            break
+
         if not prompt:
             continue
         if prompt.startswith("/"):

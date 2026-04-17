@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import time
+import os
+import signal
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -41,7 +43,8 @@ class ExecutionPolicy:
     home_dir: Path
     allowed_tools: set[str] = field(default_factory=set)
     allowed_programs: set[str] = field(default_factory=lambda: {"git", "rg", "where"})
-    command_timeout_sec: int = 20
+    allow_harness: bool = True
+    command_timeout_sec: int = 60
     network_enabled: bool = True
     max_output_chars: int = 4000
 
@@ -150,6 +153,22 @@ def build_default_tool_registry(policy: ExecutionPolicy, search_service=None) ->
             },
         ),
         _execute_command_run,
+    )
+    registry.register(
+        ToolSpec(
+            name="harness_bash",
+            description="Run a shell command (bash/cmd) in the workspace. Use this for testing, building, or executing code. Long-running processes will be terminated after timeout.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string"},
+                    "cwd": {"type": "string", "description": "Relative to workspace root. Defaults to root."},
+                },
+                "required": ["command"],
+            },
+            timeout_sec=60,
+        ),
+        _execute_harness_bash,
     )
     registry.register(
         ToolSpec(
@@ -263,6 +282,78 @@ def _execute_command_run(arguments: dict[str, object], context: ToolContext, pol
         meta={"exit_code": completed.returncode},
     )
 
+
+def _execute_harness_bash(arguments: dict[str, object], context: ToolContext, policy: ExecutionPolicy) -> ToolResult:
+    if not policy.allow_harness:
+        raise PermissionError("Harness (shell) execution is disabled by policy.")
+
+    command = str(arguments.get("command", "")).strip()
+    if not command:
+        raise ValueError("command is required")
+
+    cwd_arg = arguments.get("cwd")
+    cwd = policy.resolve_path(cwd_arg, must_exist=True) if cwd_arg else policy.workspace_root
+
+    # Use psutil to clean up process tree on timeout
+    import psutil
+
+    def kill_proc_tree(pid, include_parent=True):
+        try:
+            parent = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            return
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        if include_parent:
+            try:
+                parent.kill()
+            except psutil.NoSuchProcess:
+                pass
+
+    # Ensure stdout/stderr uses UTF-8 to prevent Windows encoding issues
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["LANG"] = "en_US.UTF-8"
+
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
+
+    stdout_data = ""
+    try:
+        stdout_data, _ = proc.communicate(timeout=policy.command_timeout_sec)
+        returncode = proc.returncode
+    except subprocess.TimeoutExpired:
+        kill_proc_tree(proc.pid)
+        stdout_data, _ = proc.communicate()
+        returncode = proc.returncode
+        stdout_data += "\n\n[Timeout] Command terminated after {} seconds.".format(policy.command_timeout_sec)
+
+    stdout_data = stdout_data.strip()
+    excerpt = stdout_data[: policy.max_output_chars]
+
+    return ToolResult(
+        ok=returncode == 0,
+        output={
+            "command": command,
+            "cwd": str(cwd),
+            "exit_code": returncode,
+            "output": excerpt,
+        },
+        summary=f"Ran bash command '{command[:20]}...' (exit={returncode}).",
+        error=None if returncode == 0 else (excerpt or f"Command exited with {returncode}"),
+        meta={"exit_code": returncode},
+    )
 
 def _execute_http_fetch(arguments: dict[str, object], context: ToolContext, policy: ExecutionPolicy) -> ToolResult:
     if not policy.network_enabled:
