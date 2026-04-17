@@ -9,6 +9,7 @@ from unittest.mock import patch
 from justin.config import AgentConfig
 from justin.runtime import JustinRuntime, build_runtime_bundle
 from justin.tools import ToolResult
+from justin.types import ChatResponse, ChatToolCall
 
 
 class RuntimeTests(unittest.TestCase):
@@ -61,8 +62,23 @@ class RuntimeTests(unittest.TestCase):
             meta={"latency_ms": 12},
         )
 
+        fake_responses = [
+            ChatResponse(
+                content="",
+                tool_calls=[
+                    ChatToolCall(
+                        id="call_123",
+                        name="search_web",
+                        arguments='{"query": "latest python release notes"}'
+                    )
+                ]
+            ),
+            ChatResponse(content="Here are the release notes.")
+        ]
+        
         with patch.object(self.runtime.tool_registry, "execute", return_value=fake_result):
-            turn = self.runtime.send_message("latest python release notes")
+            with patch.object(self.runtime.chat_provider, "generate", side_effect=fake_responses):
+                turn = self.runtime.send_message("latest python release notes")
 
         self.assertEqual(len(turn.tool_events), 1)
         self.assertEqual(turn.tool_events[0].tool_name, "search_web")

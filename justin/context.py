@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from .types import ContextTelemetry, Message, RetrievedMemory, StoredToolFact, ToolEvent
 
@@ -19,7 +20,7 @@ class ContextBudgetPolicy:
 @dataclass(slots=True)
 class ContextAssembly:
     system_prompt: str
-    conversation: list[dict[str, str]]
+    conversation: list[dict[str, Any]]
     summary: str
     telemetry: ContextTelemetry
 
@@ -108,7 +109,7 @@ class ConversationContextBuilder:
         memory_block: str,
         tool_fact_block: str,
         tool_event_block: str,
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         fixed_cost = estimate_tokens("\n".join([summary, memory_block, tool_fact_block, tool_event_block]))
         token_budget = max(self.policy.max_input_tokens - self.policy.reserved_output_tokens - fixed_cost, 200)
         selected: list[Message] = []

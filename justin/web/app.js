@@ -8,6 +8,10 @@ const sessionsEl = document.getElementById("sessions");
 const candidatesEl = document.getElementById("candidates");
 const memoriesEl = document.getElementById("memories");
 const traceEl = document.getElementById("trace");
+const toolsEl = document.getElementById("tools");
+const citationsEl = document.getElementById("citations");
+const skillsEl = document.getElementById("skills");
+const telemetryEl = document.getElementById("telemetry");
 const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 const newSessionBtn = document.getElementById("new-session-btn");
@@ -79,7 +83,7 @@ function renderMemory(memory) {
 
 function renderTrace(items) {
   traceEl.innerHTML = "";
-  if (!items.length) {
+  if (!items || !items.length) {
     traceEl.textContent = "本次没有检索到已确认长期记忆。";
     traceEl.classList.add("muted");
     return;
@@ -94,6 +98,79 @@ function renderTrace(items) {
     `;
     traceEl.appendChild(node);
   }
+}
+
+function renderTools(items) {
+  toolsEl.innerHTML = "";
+  if (!items || !items.length) {
+    toolsEl.textContent = "No tools executed.";
+    toolsEl.classList.add("muted");
+    return;
+  }
+  toolsEl.classList.remove("muted");
+  for (const item of items) {
+    const node = document.createElement("article");
+    node.className = "memory-card";
+    const status = item.ok ? '<span style="color: green">ok</span>' : '<span style="color: red">error</span>';
+    node.innerHTML = `
+      <div class="card-label">${escapeHtml(item.tool_name)} · ${status}</div>
+      <div>${escapeHtml(item.summary)}</div>
+      <div class="muted">${item.latency_ms}ms</div>
+    `;
+    toolsEl.appendChild(node);
+  }
+}
+
+function renderCitations(items) {
+  citationsEl.innerHTML = "";
+  if (!items || !items.length) {
+    citationsEl.textContent = "No citations.";
+    citationsEl.classList.add("muted");
+    return;
+  }
+  citationsEl.classList.remove("muted");
+  for (const item of items) {
+    const node = document.createElement("article");
+    node.className = "memory-card";
+    node.innerHTML = `
+      <div class="card-label">[${escapeHtml(item.label)}]</div>
+      <div><a href="${escapeHtml(item.url)}" target="_blank" style="color: inherit">${escapeHtml(item.title)}</a></div>
+    `;
+    citationsEl.appendChild(node);
+  }
+}
+
+function renderSkills(items) {
+  skillsEl.innerHTML = "";
+  if (!items || !items.length) {
+    skillsEl.textContent = "No skills activated.";
+    skillsEl.classList.add("muted");
+    return;
+  }
+  skillsEl.classList.remove("muted");
+  for (const item of items) {
+    const node = document.createElement("article");
+    node.className = "memory-card";
+    node.innerHTML = `
+      <div class="card-label">${escapeHtml(item.name)} v${escapeHtml(item.version)}</div>
+      <div>${escapeHtml(item.summary)}</div>
+    `;
+    skillsEl.appendChild(node);
+  }
+}
+
+function renderTelemetry(item) {
+  telemetryEl.innerHTML = "";
+  if (!item) {
+    telemetryEl.textContent = "No context telemetry yet.";
+    telemetryEl.classList.add("muted");
+    return;
+  }
+  telemetryEl.classList.remove("muted");
+  telemetryEl.innerHTML = `
+    <div>Context: <strong>${item.context_tokens_after}</strong> tokens</div>
+    <div class="muted">Saved ${item.saved_tokens} tokens by compression</div>
+  `;
 }
 
 async function refreshState() {
@@ -131,6 +208,11 @@ async function loadSession(sessionId) {
   const payload = await api(`/api/sessions/${sessionId}`);
   chatEl.innerHTML = "";
   payload.messages.forEach((message) => chatEl.appendChild(renderMessage(message)));
+  renderTrace([]);
+  renderTools([]);
+  renderCitations([]);
+  renderSkills([]);
+  renderTelemetry(null);
   await refreshState();
 }
 
@@ -156,6 +238,10 @@ async function sendMessage(event) {
   chatEl.scrollTop = chatEl.scrollHeight;
 
   renderTrace(result.recalled_memories);
+  renderTools(result.tool_events);
+  renderCitations(result.citations);
+  renderSkills(result.activated_skills);
+  renderTelemetry(result.context_telemetry);
   await refreshState();
 }
 
@@ -177,6 +263,10 @@ async function createSession() {
   state.currentSessionId = created.id;
   chatEl.innerHTML = "";
   renderTrace([]);
+  renderTools([]);
+  renderCitations([]);
+  renderSkills([]);
+  renderTelemetry(null);
   await refreshState();
 }
 

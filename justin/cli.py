@@ -196,6 +196,77 @@ class JustinCliRenderer:
             )
         )
 
+    def show_tool_events(self, events: list[Any]) -> None:
+        if not events or not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            print("Tool Events:")
+            for event in events:
+                marker = "ok" if event.ok else "error"
+                print(f"  - [{marker}] {event.tool_name}: {event.summary} ({event.latency_ms}ms)")
+            return
+
+        table = Table(show_header=True, header_style="bold #ffb000", box=None)
+        table.add_column("Status", style="bold")
+        table.add_column("Tool", style="#f3c88d")
+        table.add_column("Summary", style="white")
+        table.add_column("Latency", style="dim")
+        for event in events:
+            marker = "[green]ok[/green]" if event.ok else "[red]error[/red]"
+            table.add_row(marker, event.tool_name, event.summary, f"{event.latency_ms}ms")
+        self.console.print(
+            Panel(table, title="[bold dim]Tool Events[/bold dim]", border_style="dim")
+        )
+
+    def show_citations(self, citations: list[Any]) -> None:
+        if not citations or not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            print("Citations:")
+            for c in citations:
+                print(f"  - [{c.label}] {c.title}: {c.url}")
+            return
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Label", style="bold #f3c88d")
+        table.add_column("Details", style="white")
+        for c in citations:
+            table.add_row(f"[{c.label}]", f"{c.title}\n[dim]{c.url}[/dim]")
+        self.console.print(
+            Panel(table, title="[bold dim]Citations[/bold dim]", border_style="dim")
+        )
+
+    def show_activated_skills(self, skills: list[Any]) -> None:
+        if not skills or not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            print("Activated Skills:")
+            for s in skills:
+                print(f"  - {s.name} ({s.version}): {s.summary}")
+            return
+
+        table = Table(show_header=False, box=None)
+        table.add_column("Skill", style="bold #f3c88d")
+        table.add_column("Summary", style="white")
+        for s in skills:
+            table.add_row(f"{s.name} v{s.version}", s.summary)
+        self.console.print(
+            Panel(table, title="[bold dim]Activated Skills[/bold dim]", border_style="dim")
+        )
+
+    def show_context_telemetry(self, telemetry: Any) -> None:
+        if not telemetry or not self.interactive:
+            return
+        if not RICH_AVAILABLE:
+            print(f"Telemetry: Context {telemetry.context_tokens_after} tokens "
+                  f"(saved {telemetry.saved_tokens}).")
+            return
+
+        self.console.print(
+            f"[dim]telemetry: context {telemetry.context_tokens_after} tokens "
+            f"| saved {telemetry.saved_tokens} tokens by compression[/dim]"
+        )
+
     def show_candidates(self, candidates: list[Any]) -> None:
         if not candidates or not self.interactive:
             return
@@ -426,8 +497,12 @@ def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | Non
         if result is None:
             continue
         active_session_id = result.session.id
+        renderer.show_tool_events(result.tool_events)
+        renderer.show_citations(result.citations)
+        renderer.show_activated_skills(result.activated_skills)
         renderer.show_assistant_message(result.assistant_message.content)
         renderer.show_candidates(result.candidates)
+        renderer.show_context_telemetry(result.context_telemetry)
 
 
 def _send_with_feedback(

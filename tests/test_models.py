@@ -43,7 +43,7 @@ class ModelParsingTests(unittest.TestCase):
                 }
             ]
         }
-        text = self.provider._extract_response_text(payload)
+        text = self.provider._extract_response(payload).content
         self.assertEqual(text, "hello world")
 
     def test_raises_when_only_reasoning_and_truncated(self) -> None:
@@ -59,7 +59,7 @@ class ModelParsingTests(unittest.TestCase):
             ]
         }
         with self.assertRaises(RuntimeError) as ctx:
-            self.provider._extract_response_text(payload)
+            self.provider._extract_response(payload)
         self.assertIn("JUSTIN_MODEL_MAX_TOKENS", str(ctx.exception))
 
     def test_generate_retries_when_length_without_final_content(self) -> None:
@@ -108,7 +108,7 @@ class ModelParsingTests(unittest.TestCase):
             return _FakeHTTPResponse(second_response)
 
         with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
-            text = provider.generate(request_payload)
+            text = provider.generate(request_payload).content
 
         self.assertEqual(text, "你好，我在。")
         self.assertEqual(len(calls), 2)
@@ -155,7 +155,7 @@ class ModelParsingTests(unittest.TestCase):
             return _FakeHTTPResponse(ok_response)
 
         with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
-            text = provider.generate(request_payload)
+            text = provider.generate(request_payload).content
 
         self.assertEqual(text, "ok")
         self.assertEqual(len(calls), 2)
@@ -194,7 +194,7 @@ class ModelParsingTests(unittest.TestCase):
             return _FakeHTTPResponse(ok_response)
 
         with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
-            text = provider.generate(request_payload)
+            text = provider.generate(request_payload).content
 
         self.assertEqual(text, "hello")
         self.assertEqual(len(calls), 2)

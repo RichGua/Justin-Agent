@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -217,7 +216,6 @@ class JustinRuntime:
         self.store.add_message(session.id, "user", content)
         recalled_memories = self.store.search_memories(content, top_k=self.config.retrieval_top_k)
         activated_skills = self.skill_manager.match_for_query(content)
-        turn_tool_events, citations = self._collect_turn_evidence(content, session.id)
         tool_facts = self.store.search_tool_facts(
             content,
             session_id=session.id,
@@ -230,28 +228,102 @@ class JustinRuntime:
                 self.config.context_summary_trigger_messages + self.config.context_messages + 4,
             ),
         )
-        context = self.context_builder.build(
-            session_id=session.id,
-            latest_user_message=content,
-            messages=messages,
-            recalled_memories=recalled_memories,
-            tool_events=turn_tool_events,
-            tool_facts=tool_facts,
-            activated_skill_block=self.skill_manager.build_activation_block(activated_skills),
-            citation_block=_format_citation_block(citations),
-        )
 
-        payload = ChatRequest(
-            system_prompt=context.system_prompt,
-            conversation=context.conversation,
-            memory_snippets=[memory.content for memory in recalled_memories],
-            latest_user_message=content,
-            citations=citations,
-            tool_events=turn_tool_events,
-            activated_skills=activated_skills,
-        )
+        turn_tool_events: list[ToolEvent] = []
+        citations: list[Citation] = []
+        
+        tools_schema = self._build_tools_schema()
+        intermediate_messages = []
 
-        response_text = self.chat_provider.generate(payload)
+        for _ in range(5):  # Max tool call iterations
+            context = self.context_builder.build(
+                session_id=session.id,
+                latest_user_message=content,
+                messages=messages,
+                recalled_memories=recalled_memories,
+                tool_events=turn_tool_events,
+                tool_facts=tool_facts,
+                activated_skill_block=self.skill_manager.build_activation_block(activated_skills),
+                citation_block=_format_citation_block(citations),
+            )
+
+            # Combine DB messages with intermediate tool_call and tool messages
+            full_conversation = context.conversation + intermediate_messages
+
+            payload = ChatRequest(
+                system_prompt=context.system_prompt,
+                conversation=full_conversation,
+                memory_snippets=[memory.content for memory in recalled_memories],
+                latest_user_message=content,
+                citations=citations,
+                tool_events=turn_tool_events,
+                activated_skills=activated_skills,
+                tools=tools_schema,
+            )
+
+            response = self.chat_provider.generate(payload)
+
+            if not response.tool_calls:
+                response_text = response.content
+                break
+
+            # Execute tool calls
+            tool_calls_dicts = []
+            for tc in response.tool_calls:
+                tool_calls_dicts.append({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": tc.arguments
+                    }
+                })
+            
+            # Append assistant message with tool_calls
+            intermediate_messages.append({
+                "role": "assistant",
+                "content": response.content or "",
+                "tool_calls": tool_calls_dicts
+            })
+            
+            # Let's execute the tools
+            for tc in response.tool_calls:
+                import json
+                try:
+                    arguments = json.loads(tc.arguments)
+                except json.JSONDecodeError:
+                    arguments = {}
+
+                result = self.tool_registry.execute(tc.name, arguments, self._tool_context(session.id))
+                output = result.output if isinstance(result.output, dict) else {"value": result.output}
+                event = self.store.add_tool_event(
+                    session_id=session.id,
+                    tool_name=tc.name,
+                    arguments=arguments,
+                    ok=result.ok,
+                    output=output,
+                    summary=result.summary,
+                    error=result.error,
+                    latency_ms=int(result.meta.get("latency_ms", 0)),
+                    source=result.source,
+                )
+                turn_tool_events.append(event)
+                self._persist_tool_facts(event)
+                citations.extend(self._citations_for_event(event))
+
+                # Append tool result message
+                intermediate_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "name": tc.name,
+                    "content": json.dumps(output, ensure_ascii=False) if result.ok else str(result.error)
+                })
+            
+            citations = _dedupe_citations(citations)
+            
+        else:
+            response_text = response.content or "Tool call limit reached."
+
         candidate_records = self._create_candidates(content, session.id)
 
         assistant_message = self.store.add_message(
@@ -279,6 +351,19 @@ class JustinRuntime:
             context_telemetry=context.telemetry,
         )
 
+    def _build_tools_schema(self) -> list[dict[str, object]]:
+        schema = []
+        for spec in self.tool_registry.list_specs():
+            schema.append({
+                "type": "function",
+                "function": {
+                    "name": spec.name,
+                    "description": spec.description,
+                    "parameters": spec.input_schema
+                }
+            })
+        return schema
+
     def _create_candidates(self, content: str, session_id: str) -> list[MemoryCandidate]:
         drafts = self.extractor.extract(content)
         candidates: list[MemoryCandidate] = []
@@ -294,27 +379,7 @@ class JustinRuntime:
                 candidates.append(candidate)
         return candidates
 
-    def _collect_turn_evidence(self, content: str, session_id: str) -> tuple[list[ToolEvent], list[Citation]]:
-        events: list[ToolEvent] = []
-        citations: list[Citation] = []
-        for tool_name, arguments in self._plan_turn_tools(content):
-            result = self.tool_registry.execute(tool_name, arguments, self._tool_context(session_id))
-            output = result.output if isinstance(result.output, dict) else {"value": result.output}
-            event = self.store.add_tool_event(
-                session_id=session_id,
-                tool_name=tool_name,
-                arguments=arguments,
-                ok=result.ok,
-                output=output,
-                summary=result.summary,
-                error=result.error,
-                latency_ms=int(result.meta.get("latency_ms", 0)),
-                source=result.source,
-            )
-            events.append(event)
-            self._persist_tool_facts(event)
-            citations.extend(self._citations_for_event(event))
-        return events, _dedupe_citations(citations)
+
 
     def _tool_context(self, session_id: str) -> ToolContext:
         cwd = Path.cwd().resolve()
@@ -325,32 +390,7 @@ class JustinRuntime:
             cwd=cwd,
         )
 
-    def _plan_turn_tools(self, content: str) -> list[tuple[str, dict[str, object]]]:
-        normalized = content.strip().lower()
-        plans: list[tuple[str, dict[str, object]]] = []
 
-        if self.search_service is not None and self._should_search_web(normalized):
-            plans.append(
-                (
-                    "search_web",
-                    {
-                        "query": _normalize_search_query(content),
-                        "top_k": self.config.search_top_k,
-                        "locale": self.config.search_locale,
-                    },
-                )
-            )
-
-        first_url = _extract_first_url(content)
-        if first_url and any(token in normalized for token in _PAGE_EXTRACT_HINTS):
-            plans.append(("page_extract", {"url": first_url}))
-
-        return plans[:2]
-
-    def _should_search_web(self, normalized: str) -> bool:
-        if not normalized or not self.config.network_tools_enabled:
-            return False
-        return any(token in normalized for token in _SEARCH_HINTS)
 
     def _persist_tool_facts(self, event: ToolEvent) -> None:
         if not event.ok:
@@ -485,51 +525,6 @@ class JustinRuntime:
         self.search_service = _build_search_service(self.config, self.store)
         self.tool_registry = _build_tool_registry(self.config, self.search_service)
         self.skill_manager = SkillManager(self.config.skills_dir, self.store)
-
-
-_SEARCH_HINTS = (
-    "search ",
-    "look up ",
-    "find on the web",
-    "web search",
-    "latest ",
-    "current ",
-    "today",
-    "news",
-    "查一下",
-    "帮我查",
-    "搜索",
-    "搜一下",
-    "最新",
-    "今天",
-)
-
-_PAGE_EXTRACT_HINTS = (
-    "extract",
-    "summarize this page",
-    "read this page",
-    "open this page",
-    "页面",
-    "网页",
-    "链接",
-    "总结",
-)
-
-
-def _normalize_search_query(content: str) -> str:
-    stripped = content.strip()
-    cleaned = re.sub(
-        r"^(search|look up|find|web search|查一下|帮我查|搜索|搜一下)\s*[:：]?\s*",
-        "",
-        stripped,
-        flags=re.IGNORECASE,
-    )
-    return cleaned or stripped
-
-
-def _extract_first_url(content: str) -> str | None:
-    match = re.search(r"https?://[^\s)>]+", content)
-    return match.group(0) if match else None
 
 
 def _dedupe_citations(citations: list[Citation]) -> list[Citation]:

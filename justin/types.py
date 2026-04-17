@@ -170,12 +170,26 @@ class AgentTurnResult:
 @dataclass(slots=True)
 class ChatRequest:
     system_prompt: str
-    conversation: list[dict[str, str]]
+    conversation: list[dict[str, Any]]
     memory_snippets: list[str]
     latest_user_message: str
     citations: list[Citation] = field(default_factory=list)
     tool_events: list[ToolEvent] = field(default_factory=list)
     activated_skills: list[InstalledSkill] = field(default_factory=list)
+    tools: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ChatToolCall:
+    id: str
+    name: str
+    arguments: str
+
+
+@dataclass(slots=True)
+class ChatResponse:
+    content: str
+    tool_calls: list[ChatToolCall] = field(default_factory=list)
 
 
 def now_iso() -> str:
