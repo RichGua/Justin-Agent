@@ -30,6 +30,9 @@ The current version focuses on a safe memory loop rather than full autonomy. It 
 - `Traceability`: each response can show which approved memories were recalled
 - `Local dashboard`: chat, candidate review, and memory browsing in one place
 - 📱 **WeChat Integration**: Native integration with personal WeChat accounts using Tencent's iLink Bot API. Supports long-polling, media CDN encryption, and QR code device flow.
+- 🗜️ **Context Compression**: Run `/compact` to summarize history using the LLM and free up tokens!
+- 📝 **Todo Manager**: Track multi-step plans with a built-in Todo mechanism.
+- 🛠️ **MCP (Model Context Protocol)**: Connect to any standard MCP server.
 
 ### Installation
 

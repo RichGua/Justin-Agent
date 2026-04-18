@@ -271,8 +271,14 @@ class JustinCliRenderer:
                   f"(saved {telemetry.saved_tokens}).")
             return
 
+        tokens_str = str(telemetry.context_tokens_after)
+        if telemetry.context_tokens_after > 6000:
+            tokens_str = f"[bold red]{tokens_str}[/bold red]"
+        else:
+            tokens_str = f"[cyan]{tokens_str}[/cyan]"
+
         self.console.print(
-            f"[dim]telemetry: context {telemetry.context_tokens_after} tokens "
+            f"[dim]telemetry: context[/dim] {tokens_str} [dim]tokens "
             f"| saved {telemetry.saved_tokens} tokens by compression[/dim]"
         )
 
@@ -717,6 +723,8 @@ def _print_cli_help() -> None:
     print("  /setup                 Re-run setup wizard")
     print("  /wechat                Start the agent in WeChat mode")
     print("  /candidates            List pending memory candidates")
+    print("  /compact               Compress current session context using LLM")
+    print("  /tokens <num>          Set max_tokens limit")
     print("  /approve <id>          Approve a candidate")
     print("  /reject <id> [note]    Reject a candidate")
     print("  /memories [query]      List/search approved memories")
@@ -776,6 +784,34 @@ def _handle_slash_command(
             return active_session_id, False
         for item in items[:20]:
             renderer.show_info(f"- {item.id} [{item.kind}] {item.content}")
+        return active_session_id, False
+    if command == "/compact":
+        if not active_session_id:
+            renderer.show_info("No active session to compact.")
+            return active_session_id, False
+        with renderer.thinking():
+            summary = runtime.context_builder.compact(active_session_id)
+        if RICH_AVAILABLE:
+            from rich.panel import Panel
+            from rich.text import Text
+            panel = Panel(
+                Text(summary, style="dim"),
+                title="[bold green]Context Compacted[/bold green]",
+                border_style="green",
+                expand=False,
+            )
+            renderer.console.print(panel)
+        else:
+            print(summary)
+        return active_session_id, False
+    if command == "/tokens":
+        if len(tokens) == 2 and tokens[1].isdigit():
+            num = int(tokens[1])
+            runtime.config.model_max_tokens = num
+            runtime.apply_config(runtime.config)
+            renderer.show_info(f"Max tokens updated to {num}.")
+        else:
+            renderer.show_info("Usage: /tokens <num>")
         return active_session_id, False
     if command == "/approve":
         if len(tokens) < 2:

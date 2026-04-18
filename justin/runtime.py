@@ -129,7 +129,7 @@ def build_runtime_bundle(config: AgentConfig | None = None) -> RuntimeBundle:
     store = AgentStore(config.database_path, embedder)
     extractor = HeuristicMemoryExtractor()
     chat_provider = build_chat_provider(config)
-    context_builder = _build_context_builder(config, store)
+    context_builder = _build_context_builder(config, store, chat_provider)
     search_service = _build_search_service(config, store)
     tool_registry = _build_tool_registry(config, search_service)
     skill_manager = SkillManager(config.skills_dir, store)
@@ -148,7 +148,7 @@ def build_runtime_bundle(config: AgentConfig | None = None) -> RuntimeBundle:
     )
 
 
-def _build_context_builder(config: AgentConfig, store: AgentStore) -> ConversationContextBuilder:
+def _build_context_builder(config: AgentConfig, store: AgentStore, chat_provider: ChatProvider) -> ConversationContextBuilder:
     policy = ContextBudgetPolicy(
         max_input_tokens=config.context_max_input_tokens,
         reserved_output_tokens=config.context_reserved_output_tokens,
@@ -157,7 +157,7 @@ def _build_context_builder(config: AgentConfig, store: AgentStore) -> Conversati
         tool_fact_limit=config.context_tool_fact_limit,
         compression_tier=config.context_policy,
     )
-    return ConversationContextBuilder(store=store, policy=policy)
+    return ConversationContextBuilder(store=store, policy=policy, chat_provider=chat_provider)
 
 
 def _build_search_service(config: AgentConfig, store: AgentStore) -> SearchService | None:
@@ -235,7 +235,13 @@ class JustinRuntime:
         tools_schema = self._build_tools_schema()
         intermediate_messages = []
 
-        for _ in range(5):  # Max tool call iterations
+        for i in range(25):  # Max tool call iterations
+            if i == 20:
+                intermediate_messages.append({
+                    "role": "user",
+                    "content": "[SYSTEM WARNING] You have reached iteration 20. You MUST stop using tools and provide a final answer immediately to avoid an infinite loop."
+                })
+
             context = self.context_builder.build(
                 session_id=session.id,
                 latest_user_message=content,
