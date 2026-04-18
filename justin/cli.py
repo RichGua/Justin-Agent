@@ -654,6 +654,17 @@ def _maybe_prompt_first_run_setup(config: AgentConfig) -> AgentConfig:
     if any(os.getenv(name) for name in SETUP_ENV_KEYS):
         return config
 
+    if RICH_AVAILABLE:
+        from rich.console import Console
+        from rich.prompt import Confirm
+        console = Console()
+        console.print("[bold #ffb000]First run detected.[/bold #ffb000] Let's configure your model provider for Justin.")
+        answer = Confirm.ask("Run setup wizard now?")
+        if answer:
+            return run_setup_wizard(config)
+        console.print("[dim]Skipping setup. Justin will run with local fallback model.[/dim]")
+        return config
+
     print("First run detected. Let's configure your model provider for Justin.")
     answer = input("Run setup wizard now? [Y/n]: ").strip().lower()
     if answer in {"", "y", "yes"}:
@@ -667,13 +678,28 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
     config = config or AgentConfig.from_env()
     config.ensure_directories()
 
-    print("\n=== Justin Setup Wizard ===")
-    print("Choose your provider:")
-    print("  1) OPENAI")
-    print("  2) Ollama")
-    print("  3) Nvidia NIM")
-    print("  4) Local fallback (no API)")
-    choice = _ask_choice({"1", "2", "3", "4"}, default="1")
+    if RICH_AVAILABLE:
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.prompt import Prompt, Confirm
+        from rich.text import Text
+        console = Console()
+        console.print()
+        console.print(Panel("[bold #ffb000]Justin Setup Wizard[/bold #ffb000]", border_style="#d28d00", expand=False))
+        console.print("Choose your provider:")
+        console.print("  [bold #ffb000]1)[/bold #ffb000] OPENAI")
+        console.print("  [bold #ffb000]2)[/bold #ffb000] Ollama")
+        console.print("  [bold #ffb000]3)[/bold #ffb000] Nvidia NIM")
+        console.print("  [bold #ffb000]4)[/bold #ffb000] Local fallback (no API)")
+        choice = Prompt.ask("Select provider", choices=["1", "2", "3", "4"], default="1")
+    else:
+        print("\n=== Justin Setup Wizard ===")
+        print("Choose your provider:")
+        print("  1) OPENAI")
+        print("  2) Ollama")
+        print("  3) Nvidia NIM")
+        print("  4) Local fallback (no API)")
+        choice = _ask_choice({"1", "2", "3", "4"}, default="1")
 
     if choice == "1":
         config.model_provider = PROVIDER_OPENAI
@@ -700,8 +726,15 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
     config.save_settings()
     _apply_env(config)
 
-    print(f"Saved setup to {config.settings_path}")
-    print("You can re-run this anytime with: Justin setup\n")
+    if RICH_AVAILABLE:
+        from rich.console import Console
+        console = Console()
+        console.print(f"\n[green]✓[/green] Saved setup to [bold]{config.settings_path}[/bold]")
+        console.print("You can re-run this anytime with: [bold #f3c88d]Justin setup[/bold #f3c88d]\n")
+    else:
+        print(f"Saved setup to {config.settings_path}")
+        print("You can re-run this anytime with: Justin setup\n")
+        
     return config
 
 
@@ -735,6 +768,20 @@ def _ask_choice(allowed: set[str], default: str) -> str:
 
 
 def _ask_text(label: str, default: str | None = None, required: bool = True, secret: bool = False) -> str:
+    if RICH_AVAILABLE:
+        from rich.prompt import Prompt
+        while True:
+            value = Prompt.ask(label, default=default, password=secret).strip()
+            if not value and default is not None:
+                value = default
+            if value or not required:
+                if secret and value:
+                    from rich.console import Console
+                    Console().print(f"[dim]{label} set.[/dim]")
+                return value
+            from rich.console import Console
+            Console().print(f"[red]{label} is required.[/red]")
+
     suffix = f" [{default}]" if default else ""
     while True:
         value = input(f"{label}{suffix}: ").strip()
