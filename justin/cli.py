@@ -489,6 +489,10 @@ def _get_prompt_session(runtime: JustinRuntime) -> Any:
     history_file = runtime.config.settings_path.parent / ".cli_history"
     bindings = KeyBindings()
 
+    @bindings.add("enter")
+    def _(event):
+        event.current_buffer.validate_and_handle()
+
     @bindings.add("escape", "enter")
     @bindings.add("c-j") # Some terminals send ctrl-j for alt-enter
     def _(event):
