@@ -679,6 +679,8 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
     config.ensure_directories()
 
     try:
+        has_config = config.has_user_settings()
+        
         if RICH_AVAILABLE:
             from rich.console import Console
             from rich.panel import Panel
@@ -688,6 +690,8 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
             console.print()
             console.print(Panel("[bold #ffb000]Justin Setup Wizard[/bold #ffb000]", border_style="#d28d00", expand=False))
             console.print("Choose your provider:")
+            if has_config:
+                console.print(f"  [bold #ffb000]0)[/bold #ffb000] Keep current config ({config.model_provider})")
             console.print("  [bold #ffb000]1)[/bold #ffb000] OPENAI")
             console.print("  [bold #ffb000]2)[/bold #ffb000] Ollama")
             console.print("  [bold #ffb000]3)[/bold #ffb000] Nvidia NIM")
@@ -700,12 +704,15 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
                 PROVIDER_NVIDIA_NIM: "3",
                 PROVIDER_LOCAL: "4"
             }
-            default_choice = provider_map.get(config.model_provider, "1")
+            default_choice = "0" if has_config else provider_map.get(config.model_provider, "1")
+            choices = ["0", "1", "2", "3", "4"] if has_config else ["1", "2", "3", "4"]
             
-            choice = Prompt.ask("Select provider", choices=["1", "2", "3", "4"], default=default_choice)
+            choice = Prompt.ask("Select provider", choices=choices, default=default_choice)
         else:
             print("\n=== Justin Setup Wizard ===")
             print("Choose your provider:")
+            if has_config:
+                print(f"  0) Keep current config ({config.model_provider})")
             print("  1) OPENAI")
             print("  2) Ollama")
             print("  3) Nvidia NIM")
@@ -717,10 +724,17 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
                 PROVIDER_NVIDIA_NIM: "3",
                 PROVIDER_LOCAL: "4"
             }
-            default_choice = provider_map.get(config.model_provider, "1")
-            choice = _ask_choice({"1", "2", "3", "4"}, default=default_choice)
+            default_choice = "0" if has_config else provider_map.get(config.model_provider, "1")
+            choices = {"0", "1", "2", "3", "4"} if has_config else {"1", "2", "3", "4"}
+            choice = _ask_choice(choices, default=default_choice)
 
-        if choice == "1":
+        if choice == "0":
+            if RICH_AVAILABLE:
+                console.print("[dim]Keeping current configuration. Setup skipped.[/dim]")
+            else:
+                print("Keeping current configuration. Setup skipped.")
+            return config
+        elif choice == "1":
             config.model_provider = PROVIDER_OPENAI
             config.api_base = _ask_text("OpenAI API base", default=config.api_base or "https://api.openai.com/v1")
             config.model_name = _ask_text("OpenAI model", default=config.model_name or "gpt-4.1-mini")
