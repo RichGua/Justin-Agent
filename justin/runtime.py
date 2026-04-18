@@ -241,7 +241,6 @@ class JustinRuntime:
                     "role": "user",
                     "content": "[SYSTEM WARNING] You have reached iteration 20. You MUST stop using tools and provide a final answer immediately to avoid an infinite loop."
                 })
-
             context = self.context_builder.build(
                 session_id=session.id,
                 latest_user_message=content,
