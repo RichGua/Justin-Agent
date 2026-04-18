@@ -15,6 +15,7 @@ from .config import (
     PROVIDER_NVIDIA_NIM,
     PROVIDER_OLLAMA,
     PROVIDER_OPENAI,
+    PROVIDER_OPENAI_COMPATIBLE,
 )
 from .runtime import JustinRuntime, build_runtime_bundle
 from .types import to_plain_dict
