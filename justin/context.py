@@ -111,9 +111,10 @@ class ConversationContextBuilder:
         
         request = ChatRequest(
             system_prompt="You are an expert summarizer.",
-            messages=[{"role": "user", "content": prompt}],
+            conversation=[{"role": "user", "content": prompt}],
             tools=[],
             memory_snippets=[],
+            latest_user_message="",
         )
         
         try:
