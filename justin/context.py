@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from .types import ContextTelemetry, Message, RetrievedMemory, StoredToolFact, ToolEvent
+from .types import ContextTelemetry, Message, RetrievedMemory, StoredToolFact, ToolEvent, ChatRequest
+
+if TYPE_CHECKING:
+    from .models import ChatProvider
 
 
 @dataclass(slots=True)
@@ -26,9 +29,10 @@ class ContextAssembly:
 
 
 class ConversationContextBuilder:
-    def __init__(self, store, policy: ContextBudgetPolicy) -> None:
+    def __init__(self, store, policy: ContextBudgetPolicy, chat_provider: 'ChatProvider') -> None:
         self.store = store
         self.policy = policy
+        self.chat_provider = chat_provider
 
     def build(
         self,
@@ -94,13 +98,45 @@ class ConversationContextBuilder:
         return summary
 
     def _summarize_messages(self, messages: list[Message]) -> str:
-        bullets: list[str] = []
-        for message in messages[-10:]:
+        prompt = (
+            "Summarize the following conversation history concisely. "
+            "Keep the most important facts, user intents, and system actions. "
+            "Do not include conversational filler.\n\n"
+        )
+        for message in messages:
             content = " ".join(message.content.split())
             if not content:
                 continue
-            bullets.append(f"- {message.role}: {content[:140]}")
-        return "\n".join(bullets[:8])
+            prompt += f"{message.role.upper()}: {content[:500]}\n"
+        
+        request = ChatRequest(
+            system_prompt="You are an expert summarizer.",
+            messages=[{"role": "user", "content": prompt}],
+            tools=[],
+            memory_snippets=[],
+        )
+        
+        try:
+            result = self.chat_provider.generate(request)
+            return result.content or "Empty summary"
+        except Exception as e:
+            print(f"\nLLM context compression failed: {e}")
+            bullets: list[str] = []
+            for message in messages[-10:]:
+                content = " ".join(message.content.split())
+                if not content:
+                    continue
+                bullets.append(f"- {message.role}: {content[:140]}")
+            return "\n".join(bullets[:8])
+
+    def compact(self, session_id: str) -> str:
+        messages = self.store.list_messages(session_id)
+        if not messages:
+            return "No messages to compact."
+        summary = self._summarize_messages(messages)
+        self.store.upsert_session_summary(session_id, summary, source_message_count=len(messages))
+        # Optional: could delete older messages to really compact the DB
+        return summary
 
     def _select_recent_messages(
         self,
