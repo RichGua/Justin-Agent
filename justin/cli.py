@@ -414,6 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     subparsers.add_parser("setup", help="Run first-time provider/API setup wizard.")
+    subparsers.add_parser("wechat", help="Start the agent as a WeChat bot.")
 
     chat_parser = subparsers.add_parser("chat", help="Chat in one-off or interactive mode.")
     chat_parser.add_argument("--session", help="Reuse an existing session id.")
@@ -454,7 +455,7 @@ def main(argv: list[str] | None = None) -> None:
         _print_provider_summary(updated)
         return
 
-    if args.command == "chat" and args.message is None:
+    if args.command in {"chat", "wechat"} and getattr(args, "message", None) is None:
         config = _maybe_prompt_first_run_setup(config)
 
     bundle = build_runtime_bundle(config)
@@ -463,6 +464,9 @@ def main(argv: list[str] | None = None) -> None:
         match args.command:
             case "chat":
                 _run_chat(runtime, args.session, args.message)
+            case "wechat":
+                from .wechat import start_wechat_bot
+                start_wechat_bot(runtime, config)
             case "candidate":
                 _run_candidate_commands(runtime, args)
             case "memory":
@@ -711,6 +715,7 @@ def _print_cli_help() -> None:
     print("  /theme                 Show current CLI theme")
     print("  /new                   Start a new session")
     print("  /setup                 Re-run setup wizard")
+    print("  /wechat                Start the agent in WeChat mode")
     print("  /candidates            List pending memory candidates")
     print("  /approve <id>          Approve a candidate")
     print("  /reject <id> [note]    Reject a candidate")
@@ -759,6 +764,10 @@ def _handle_slash_command(
         updated = run_setup_wizard(runtime.config)
         runtime.apply_config(updated)
         renderer.show_info("Runtime provider config reloaded.")
+        return active_session_id, False
+    if command == "/wechat":
+        from .wechat import start_wechat_bot
+        start_wechat_bot(runtime, runtime.config)
         return active_session_id, False
     if command == "/candidates":
         items = runtime.list_candidates(status="pending")

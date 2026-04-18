@@ -29,6 +29,7 @@ The current version focuses on a safe memory loop rather than full autonomy. It 
 - `Hybrid retrieval`: keyword-style matching plus lightweight semantic similarity
 - `Traceability`: each response can show which approved memories were recalled
 - `Local dashboard`: chat, candidate review, and memory browsing in one place
+- 📱 **WeChat Integration**: Real-time message bridging to personal WeChat accounts using `itchat-uos`. Log in by scanning a QR code and let Justin handle your messages.
 
 ### Installation
 
@@ -58,6 +59,10 @@ To start the local dashboard:
 
 ```bash
 uv run Justin serve
+```
+
+```bash
+Justin wechat
 ```
 
 #### Option B: no clone required, install `Justin` with `uv tool`
