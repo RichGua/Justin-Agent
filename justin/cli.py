@@ -200,6 +200,7 @@ class JustinCliRenderer:
             ("/candidates", "List pending memory candidates"),
             ("/compact", "Compress session context using the model"),
             ("/tokens <num>", "Set max_tokens limit"),
+            ("/model <name>", "Switch model (e.g. /model gpt-4o)"),
             ("/approve <id>", "Approve candidate"),
             ("/reject <id> [note]", "Reject candidate"),
             ("/memories [query]", "List/search approved memories"),
@@ -306,23 +307,33 @@ class JustinCliRenderer:
             table.add_row(f"{s.name} v{s.version}", s.summary)
         self.console.print(Panel(table, title="[bold #ffb000]Activated Skills[/bold #ffb000]", border_style="#d28d00", width=panel_width))
 
-    def show_context_telemetry(self, telemetry: Any) -> None:
+    def show_context_telemetry(self, telemetry: Any, config: AgentConfig) -> None:
         if not telemetry or not self.interactive:
             return
         if not RICH_AVAILABLE:
             print(f"Telemetry: Context {telemetry.context_tokens_after} tokens "
-                  f"(saved {telemetry.saved_tokens}).")
+                  f"(saved {telemetry.saved_tokens}). Model: {config.model_name}")
             return
 
-        tokens_str = str(telemetry.context_tokens_after)
-        if telemetry.context_tokens_after > 6000:
+        max_tokens = config.context_max_input_tokens
+        used_tokens = telemetry.context_tokens_after
+        percentage = min(100, int(used_tokens / max_tokens * 100)) if max_tokens else 0
+
+        bar_length = 20
+        filled_length = int(bar_length * percentage / 100)
+        bar = "█" * filled_length + "░" * (bar_length - filled_length)
+
+        tokens_str = f"{used_tokens}/{max_tokens}"
+        if percentage > 80:
+            bar_str = f"[bold red]{bar}[/bold red]"
             tokens_str = f"[bold red]{tokens_str}[/bold red]"
         else:
+            bar_str = f"[cyan]{bar}[/cyan]"
             tokens_str = f"[cyan]{tokens_str}[/cyan]"
 
         self.console.print(
-            f"[dim]telemetry: context[/dim] {tokens_str} [dim]tokens "
-            f"| saved {telemetry.saved_tokens} tokens by compression[/dim]"
+            f"[dim]telemetry:[/dim] [bold]{config.model_name}[/bold] | "
+            f"[dim]context:[/dim] {bar_str} {tokens_str} [dim]tokens | saved {telemetry.saved_tokens} tokens[/dim]"
         )
 
     def show_candidates(self, candidates: list[Any]) -> None:
@@ -596,7 +607,7 @@ def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | Non
         renderer.show_activated_skills(result.activated_skills)
         renderer.show_assistant_message(result.assistant_message.content)
         renderer.show_candidates(result.candidates)
-        renderer.show_context_telemetry(result.context_telemetry)
+        renderer.show_context_telemetry(result.context_telemetry, runtime.config)
 
 
 def _send_with_feedback(
@@ -958,6 +969,7 @@ def _print_cli_help() -> None:
     print("  /candidates            List pending memory candidates")
     print("  /compact               Compress current session context using LLM")
     print("  /tokens <num>          Set max_tokens limit")
+    print("  /model <name>          Switch model (e.g. /model gpt-4o)")
     print("  /approve <id>          Approve a candidate")
     print("  /reject <id> [note]    Reject a candidate")
     print("  /memories [query]      List/search approved memories")
@@ -1036,6 +1048,17 @@ def _handle_slash_command(
             renderer.console.print(panel)
         else:
             print(summary)
+        return active_session_id, False
+
+    if command == "/model":
+        if len(tokens) > 1:
+            new_model = tokens[1]
+            runtime.config.model_name = new_model
+            runtime.config.save_settings()
+            runtime.apply_config(runtime.config)
+            renderer.show_info(f"Switched model to: {new_model}")
+        else:
+            renderer.show_info(f"Current model: {runtime.config.model_name}")
         return active_session_id, False
     if command == "/tokens":
         if len(tokens) == 2 and tokens[1].isdigit():
