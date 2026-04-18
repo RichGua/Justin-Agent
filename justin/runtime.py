@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from typing import Callable
+
 from .config import (
     AgentConfig,
     PROVIDER_LOCAL,
@@ -207,15 +209,31 @@ class JustinRuntime:
         self.skill_manager = bundle.skill_manager
         self.extensions = bundle.extensions
 
-    def send_message(self, content: str, session_id: str | None = None) -> AgentTurnResult:
+    def send_message(
+        self,
+        content: str,
+        session_id: str | None = None,
+        status_callback: Callable[[str], None] | None = None,
+    ) -> AgentTurnResult:
+        if status_callback:
+            status_callback("Initializing session...")
         session = self.store.get_session(session_id)
         if session is None:
             title = content.strip()[:40] or "New session"
             session = self.store.create_session(title=title)
 
         self.store.add_message(session.id, "user", content)
+        
+        if status_callback:
+            status_callback("Recalling memories...")
         recalled_memories = self.store.search_memories(content, top_k=self.config.retrieval_top_k)
+        
+        if status_callback:
+            status_callback("Matching skills...")
         activated_skills = self.skill_manager.match_for_query(content)
+        
+        if status_callback:
+            status_callback("Retrieving tool facts...")
         tool_facts = self.store.search_tool_facts(
             content,
             session_id=session.id,
@@ -236,6 +254,9 @@ class JustinRuntime:
         intermediate_messages = []
 
         for i in range(25):  # Max tool call iterations
+            if status_callback:
+                status_callback(f"Reasoning (turn {i+1})...")
+
             if i == 20:
                 intermediate_messages.append({
                     "role": "user",
@@ -293,6 +314,8 @@ class JustinRuntime:
             
             # Let's execute the tools
             for tc in response.tool_calls:
+                if status_callback:
+                    status_callback(f"Using tool: {tc.name}...")
                 import json
                 try:
                     arguments = json.loads(tc.arguments)
@@ -329,6 +352,9 @@ class JustinRuntime:
         else:
             response_text = response.content or "Tool call limit reached."
 
+        if status_callback:
+            status_callback("Finalizing response...")
+            
         candidate_records = self._create_candidates(content, session.id)
 
         assistant_message = self.store.add_message(

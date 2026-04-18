@@ -94,6 +94,38 @@ class CliMetrics:
         return self.total_latency_seconds / self.turns
 
 
+class SweepingText:
+    def __init__(self, text: str):
+        self.text = text
+        self.speed = 15.0
+
+    def update_text(self, text: str):
+        self.text = text
+
+    def __rich__(self) -> "Text":
+        from rich.text import Text
+        import time
+        t = time.time()
+        length = len(self.text)
+        if length == 0:
+            return Text("")
+
+        pos = (t * self.speed) % (length + 15) - 5
+        result = Text()
+        for i, char in enumerate(self.text):
+            dist = abs(i - pos)
+            if dist < 1.0:
+                style = "bold #ffffff"
+            elif dist < 2.5:
+                style = "bold #ffb000"
+            elif dist < 4.0:
+                style = "bold #c8680f"
+            else:
+                style = "bold #6b3e00"
+            result.append(char, style=style)
+        return result
+
+
 class JustinCliRenderer:
     def __init__(self, interactive: bool) -> None:
         self.interactive = interactive
@@ -185,12 +217,20 @@ class JustinCliRenderer:
             )
         )
 
-    def thinking(self) -> ContextManager[None]:
+    def thinking(self) -> ContextManager[Any]:
         if self.interactive and RICH_AVAILABLE:
-            return self.console.status("[bold #ffb000]JUSTIN is thinking...[/bold #ffb000]", spinner="dots")
+            self.sweeper = SweepingText("JUSTIN is thinking...")
+            self.status = self.console.status(self.sweeper, spinner="point", spinner_style="#ffb000")
+            return self.status
 
         print("Justin is thinking...", file=sys.stderr, flush=True)
         return nullcontext()
+
+    def update_status(self, message: str) -> None:
+        if hasattr(self, "sweeper"):
+            self.sweeper.update_text(message)
+        elif not RICH_AVAILABLE and self.interactive:
+            print(f"... {message}", file=sys.stderr, flush=True)
 
     def show_assistant_message(self, content: str) -> None:
         if not self.interactive:
@@ -567,7 +607,11 @@ def _send_with_feedback(
     started_at = time.perf_counter()
     with renderer.thinking():
         try:
-            result = runtime.send_message(content=content, session_id=session_id)
+            result = runtime.send_message(
+                content=content, 
+                session_id=session_id,
+                status_callback=renderer.update_status
+            )
         except Exception as exc:  # keep CLI stable and show user-facing errors.
             elapsed = time.perf_counter() - started_at
             renderer.on_turn_failure()
