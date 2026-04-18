@@ -526,7 +526,7 @@ class JustinRuntime:
         self.config.tool_max_output_chars = config.tool_max_output_chars
 
         self.chat_provider = build_chat_provider(self.config)
-        self.context_builder = _build_context_builder(self.config, self.store)
+        self.context_builder = _build_context_builder(self.config, self.store, self.chat_provider)
         self.search_service = _build_search_service(self.config, self.store)
         self.tool_registry = _build_tool_registry(self.config, self.search_service)
         self.skill_manager = SkillManager(self.config.skills_dir, self.store)
