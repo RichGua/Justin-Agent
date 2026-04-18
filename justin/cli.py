@@ -163,7 +163,10 @@ class JustinCliRenderer:
             ("/theme", "Show active CLI theme"),
             ("/new", "Start a new chat session"),
             ("/setup", "Re-run setup wizard"),
+            ("/wechat", "Start the agent in WeChat mode"),
             ("/candidates", "List pending memory candidates"),
+            ("/compact", "Compress session context using the model"),
+            ("/tokens <num>", "Set max_tokens limit"),
             ("/approve <id>", "Approve candidate"),
             ("/reject <id> [note]", "Reject candidate"),
             ("/memories [query]", "List/search approved memories"),
@@ -196,12 +199,14 @@ class JustinCliRenderer:
             print(f"\nJustin> {content}\n")
             return
 
+        panel_width = self._panel_width()
         self.console.print(
             Panel(
-                Text(content),
+                Text(content, style="white"),
                 title="[bold #ffb000]Justin[/bold #ffb000]",
                 border_style="#ffb000",
                 padding=(0, 1),
+                width=panel_width,
             )
         )
 
@@ -215,6 +220,7 @@ class JustinCliRenderer:
                 print(f"  - [{marker}] {event.tool_name}: {event.summary} ({event.latency_ms}ms)")
             return
 
+        panel_width = self._panel_width()
         table = Table(show_header=True, header_style="bold #ffb000", box=None)
         table.add_column("Status", style="bold")
         table.add_column("Tool", style="#f3c88d")
@@ -223,9 +229,7 @@ class JustinCliRenderer:
         for event in events:
             marker = "[green]ok[/green]" if event.ok else "[red]error[/red]"
             table.add_row(marker, event.tool_name, event.summary, f"{event.latency_ms}ms")
-        self.console.print(
-            Panel(table, title="[bold dim]Tool Events[/bold dim]", border_style="dim")
-        )
+        self.console.print(Panel(table, title="[bold #ffb000]Tool Events[/bold #ffb000]", border_style="#d28d00", width=panel_width))
 
     def show_citations(self, citations: list[Any]) -> None:
         if not citations or not self.interactive:
@@ -236,14 +240,13 @@ class JustinCliRenderer:
                 print(f"  - [{c.label}] {c.title}: {c.url}")
             return
 
+        panel_width = self._panel_width()
         table = Table(show_header=False, box=None)
         table.add_column("Label", style="bold #f3c88d")
         table.add_column("Details", style="white")
         for c in citations:
             table.add_row(f"[{c.label}]", f"{c.title}\n[dim]{c.url}[/dim]")
-        self.console.print(
-            Panel(table, title="[bold dim]Citations[/bold dim]", border_style="dim")
-        )
+        self.console.print(Panel(table, title="[bold #ffb000]Citations[/bold #ffb000]", border_style="#d28d00", width=panel_width))
 
     def show_activated_skills(self, skills: list[Any]) -> None:
         if not skills or not self.interactive:
@@ -254,14 +257,13 @@ class JustinCliRenderer:
                 print(f"  - {s.name} ({s.version}): {s.summary}")
             return
 
+        panel_width = self._panel_width()
         table = Table(show_header=False, box=None)
         table.add_column("Skill", style="bold #f3c88d")
         table.add_column("Summary", style="white")
         for s in skills:
             table.add_row(f"{s.name} v{s.version}", s.summary)
-        self.console.print(
-            Panel(table, title="[bold dim]Activated Skills[/bold dim]", border_style="dim")
-        )
+        self.console.print(Panel(table, title="[bold #ffb000]Activated Skills[/bold #ffb000]", border_style="#d28d00", width=panel_width))
 
     def show_context_telemetry(self, telemetry: Any) -> None:
         if not telemetry or not self.interactive:
@@ -291,15 +293,14 @@ class JustinCliRenderer:
                 print(f"  - {candidate.id} [{candidate.kind}] {candidate.content}")
             return
 
+        panel_width = self._panel_width()
         table = Table(show_header=True, header_style="bold #ffb000", box=None)
         table.add_column("ID", style="bold")
         table.add_column("Kind", style="#f3c88d")
         table.add_column("Content", style="white")
         for candidate in candidates:
             table.add_row(candidate.id, candidate.kind, candidate.content)
-        self.console.print(
-            Panel(table, title="[bold #ffb000]Pending Candidate Memories[/bold #ffb000]", border_style="#d28d00")
-        )
+        self.console.print(Panel(table, title="[bold #ffb000]Pending Candidate Memories[/bold #ffb000]", border_style="#d28d00", width=panel_width))
 
     def show_info(self, message: str) -> None:
         if self.interactive and RICH_AVAILABLE:
@@ -335,12 +336,14 @@ class JustinCliRenderer:
             message = f"Justin request failed after {elapsed_seconds:.1f}s: {detail}"
 
         if self.interactive and RICH_AVAILABLE:
+            panel_width = self._panel_width()
             self.err_console.print(
                 Panel(
                     message,
                     title="[bold red]Request Error[/bold red]",
                     border_style="red",
                     padding=(0, 1),
+                    width=panel_width,
                 )
             )
         else:
@@ -357,6 +360,7 @@ class JustinCliRenderer:
     def show_stats(self, config: AgentConfig, session_id: str | None) -> None:
         avg = self.metrics.avg_latency_seconds
         if self.interactive and RICH_AVAILABLE:
+            panel_width = self._panel_width()
             table = Table(show_header=False, box=None, expand=True)
             table.add_row("Session", session_id or "new")
             table.add_row("Provider", _provider_title(config))
@@ -370,7 +374,7 @@ class JustinCliRenderer:
                     table,
                     title="[bold #ffb000]Session Stats[/bold #ffb000]",
                     border_style="#d28d00",
-                    width=self._panel_width(),
+                    width=panel_width,
                 )
             )
             return
@@ -522,12 +526,12 @@ def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | Non
 
     pt_session = _get_prompt_session(runtime)
     if pt_session:
-        print("Tip: Press Alt+Enter or Ctrl+J to insert a newline. Press Enter to submit.")
+        renderer.show_info("Tip: Press Alt+Enter (or Ctrl+J) to insert a newline. Press Enter to submit.")
 
     while True:
         try:
             if pt_session:
-                prompt = pt_session.prompt(HTML("<b><ansigreen>you></ansigreen></b> ")).strip()
+                prompt = pt_session.prompt(HTML("<b><ansiyellow>you></ansiyellow></b> ")).strip()
             else:
                 prompt = input("you> ").strip()
         except (KeyboardInterrupt, EOFError):
