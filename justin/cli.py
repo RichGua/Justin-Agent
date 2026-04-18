@@ -694,18 +694,24 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
                 console.print(f"  [bold #ffb000]0)[/bold #ffb000] Keep current config ({config.model_provider})")
             console.print("  [bold #ffb000]1)[/bold #ffb000] OPENAI")
             console.print("  [bold #ffb000]2)[/bold #ffb000] Ollama")
-            console.print("  [bold #ffb000]3)[/bold #ffb000] Nvidia NIM")
-            console.print("  [bold #ffb000]4)[/bold #ffb000] Local fallback (no API)")
+            console.print("  [bold #ffb000]3)[/bold #ffb000] DeepSeek")
+            console.print("  [bold #ffb000]4)[/bold #ffb000] Groq")
+            console.print("  [bold #ffb000]5)[/bold #ffb000] OpenRouter")
+            console.print("  [bold #ffb000]6)[/bold #ffb000] Together AI")
+            console.print("  [bold #ffb000]7)[/bold #ffb000] Nvidia NIM")
+            console.print("  [bold #ffb000]8)[/bold #ffb000] Generic OpenAI Compatible")
+            console.print("  [bold #ffb000]9)[/bold #ffb000] Local fallback (no API)")
             
             # Determine default choice based on current config
             provider_map = {
                 PROVIDER_OPENAI: "1",
                 PROVIDER_OLLAMA: "2",
-                PROVIDER_NVIDIA_NIM: "3",
-                PROVIDER_LOCAL: "4"
+                PROVIDER_OPENAI_COMPATIBLE: "8",
+                PROVIDER_NVIDIA_NIM: "7",
+                PROVIDER_LOCAL: "9"
             }
             default_choice = "0" if has_config else provider_map.get(config.model_provider, "1")
-            choices = ["0", "1", "2", "3", "4"] if has_config else ["1", "2", "3", "4"]
+            choices = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] if has_config else ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
             
             choice = Prompt.ask("Select provider", choices=choices, default=default_choice)
         else:
@@ -715,17 +721,23 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
                 print(f"  0) Keep current config ({config.model_provider})")
             print("  1) OPENAI")
             print("  2) Ollama")
-            print("  3) Nvidia NIM")
-            print("  4) Local fallback (no API)")
+            print("  3) DeepSeek")
+            print("  4) Groq")
+            print("  5) OpenRouter")
+            print("  6) Together AI")
+            print("  7) Nvidia NIM")
+            print("  8) Generic OpenAI Compatible")
+            print("  9) Local fallback (no API)")
             
             provider_map = {
                 PROVIDER_OPENAI: "1",
                 PROVIDER_OLLAMA: "2",
-                PROVIDER_NVIDIA_NIM: "3",
-                PROVIDER_LOCAL: "4"
+                PROVIDER_OPENAI_COMPATIBLE: "8",
+                PROVIDER_NVIDIA_NIM: "7",
+                PROVIDER_LOCAL: "9"
             }
             default_choice = "0" if has_config else provider_map.get(config.model_provider, "1")
-            choices = {"0", "1", "2", "3", "4"} if has_config else {"1", "2", "3", "4"}
+            choices = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"} if has_config else {"1", "2", "3", "4", "5", "6", "7", "8", "9"}
             choice = _ask_choice(choices, default=default_choice)
 
         if choice == "0":
@@ -737,19 +749,44 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
         elif choice == "1":
             config.model_provider = PROVIDER_OPENAI
             config.api_base = _ask_text("OpenAI API base", default=config.api_base or "https://api.openai.com/v1")
-            config.model_name = _ask_text("OpenAI model", default=config.model_name or "gpt-4.1-mini")
             config.api_key = _ask_text("OpenAI API key", secret=True)
+            config.model_name = _ask_model("OpenAI model", config.api_base, config.api_key, default=config.model_name or "gpt-4o-mini")
         elif choice == "2":
             config.model_provider = PROVIDER_OLLAMA
             config.api_base = _ask_text("Ollama API base", default=config.api_base or "http://localhost:11434/v1")
-            config.model_name = _ask_text("Ollama model", default=config.model_name or "llama3.1")
             key = _ask_text("Ollama API key (optional, Enter to skip)", required=False, secret=True)
             config.api_key = key or None
+            config.model_name = _ask_model("Ollama model", config.api_base, config.api_key, default=config.model_name or "llama3.1")
         elif choice == "3":
+            config.model_provider = PROVIDER_OPENAI_COMPATIBLE
+            config.api_base = _ask_text("DeepSeek API base", default="https://api.deepseek.com/v1")
+            config.api_key = _ask_text("DeepSeek API key", secret=True)
+            config.model_name = _ask_model("DeepSeek model", config.api_base, config.api_key, default="deepseek-chat")
+        elif choice == "4":
+            config.model_provider = PROVIDER_OPENAI_COMPATIBLE
+            config.api_base = _ask_text("Groq API base", default="https://api.groq.com/openai/v1")
+            config.api_key = _ask_text("Groq API key", secret=True)
+            config.model_name = _ask_model("Groq model", config.api_base, config.api_key, default="llama-3.1-70b-versatile")
+        elif choice == "5":
+            config.model_provider = PROVIDER_OPENAI_COMPATIBLE
+            config.api_base = _ask_text("OpenRouter API base", default="https://openrouter.ai/api/v1")
+            config.api_key = _ask_text("OpenRouter API key", secret=True)
+            config.model_name = _ask_model("OpenRouter model", config.api_base, config.api_key, default="anthropic/claude-3.5-sonnet")
+        elif choice == "6":
+            config.model_provider = PROVIDER_OPENAI_COMPATIBLE
+            config.api_base = _ask_text("Together AI base", default="https://api.together.xyz/v1")
+            config.api_key = _ask_text("Together API key", secret=True)
+            config.model_name = _ask_model("Together model", config.api_base, config.api_key, default="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo")
+        elif choice == "7":
             config.model_provider = PROVIDER_NVIDIA_NIM
             config.api_base = _ask_text("NVIDIA NIM API base", default=config.api_base or "https://integrate.api.nvidia.com/v1")
-            config.model_name = _ask_text("NVIDIA model", default=config.model_name or "meta/llama-3.1-70b-instruct")
             config.api_key = _ask_text("NVIDIA NIM API key", secret=True)
+            config.model_name = _ask_model("NVIDIA model", config.api_base, config.api_key, default=config.model_name or "meta/llama-3.1-70b-instruct")
+        elif choice == "8":
+            config.model_provider = PROVIDER_OPENAI_COMPATIBLE
+            config.api_base = _ask_text("API base URL", default="https://api.example.com/v1")
+            config.api_key = _ask_text("API key", secret=True)
+            config.model_name = _ask_model("Model name", config.api_base, config.api_key, default="gpt-3.5-turbo")
         else:
             config.model_provider = PROVIDER_LOCAL
             config.model_name = "local-fallback"
@@ -807,6 +844,59 @@ def _ask_choice(allowed: set[str], default: str) -> str:
             return picked
         print(f"Invalid choice: {picked}. Expected one of {sorted(allowed)}.")
 
+
+def _fetch_models_from_api(api_base: str, api_key: str | None) -> list[str]:
+    import urllib.request
+    import json
+    
+    url = f"{api_base.rstrip('/')}/models"
+    req = urllib.request.Request(url)
+    if api_key:
+        req.add_header("Authorization", f"Bearer {api_key}")
+    try:
+        with urllib.request.urlopen(req, timeout=3) as res:
+            data = json.loads(res.read().decode())
+            models = [m.get("id") for m in data.get("data", []) if m.get("id")]
+            return sorted(models)
+    except Exception:
+        return []
+
+def _ask_model(label: str, api_base: str, api_key: str | None, default: str | None) -> str:
+    if RICH_AVAILABLE:
+        from rich.console import Console
+        from rich.prompt import Prompt
+        console = Console()
+        with console.status("[dim]Fetching available models...[/dim]", spinner="dots"):
+            models = _fetch_models_from_api(api_base, api_key)
+        
+        if models:
+            console.print(f"[green]✓ Found {len(models)} models from API.[/green]")
+            if len(models) > 30:
+                console.print(f"[dim]Showing first 30 models (type the exact name if yours is not listed):[/dim]")
+                for m in models[:30]:
+                    console.print(f"  - [cyan]{m}[/cyan]")
+            else:
+                for m in models:
+                    console.print(f"  - [cyan]{m}[/cyan]")
+            
+            if not default and models:
+                default = models[0]
+            
+            try:
+                from prompt_toolkit import prompt
+                from prompt_toolkit.completion import WordCompleter
+                completer = WordCompleter(models, ignore_case=True, match_middle=True)
+                
+                suffix = f" [{default}]" if default else ""
+                console.print(f"[bold]{label}[/bold]{suffix}: ", end="")
+                val = prompt("", completer=completer).strip()
+                if not val and default:
+                    val = default
+                return val
+            except Exception:
+                pass # fallback to normal _ask_text
+
+    return _ask_text(label, default=default)
 
 def _ask_text(label: str, default: str | None = None, required: bool = True, secret: bool = False) -> str:
     if RICH_AVAILABLE:
