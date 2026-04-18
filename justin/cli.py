@@ -798,7 +798,9 @@ def _ask_text(label: str, default: str | None = None, required: bool = True, sec
     if RICH_AVAILABLE:
         from rich.prompt import Prompt
         while True:
-            value = Prompt.ask(label, default=default, password=secret).strip()
+            raw_value = Prompt.ask(label, default=default, password=secret)
+            value = raw_value.strip() if raw_value else ""
+            
             if not value and default is not None:
                 value = default
             if value or not required:
