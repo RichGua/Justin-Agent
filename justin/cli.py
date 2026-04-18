@@ -678,64 +678,91 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
     config = config or AgentConfig.from_env()
     config.ensure_directories()
 
-    if RICH_AVAILABLE:
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.prompt import Prompt, Confirm
-        from rich.text import Text
-        console = Console()
-        console.print()
-        console.print(Panel("[bold #ffb000]Justin Setup Wizard[/bold #ffb000]", border_style="#d28d00", expand=False))
-        console.print("Choose your provider:")
-        console.print("  [bold #ffb000]1)[/bold #ffb000] OPENAI")
-        console.print("  [bold #ffb000]2)[/bold #ffb000] Ollama")
-        console.print("  [bold #ffb000]3)[/bold #ffb000] Nvidia NIM")
-        console.print("  [bold #ffb000]4)[/bold #ffb000] Local fallback (no API)")
-        choice = Prompt.ask("Select provider", choices=["1", "2", "3", "4"], default="1")
-    else:
-        print("\n=== Justin Setup Wizard ===")
-        print("Choose your provider:")
-        print("  1) OPENAI")
-        print("  2) Ollama")
-        print("  3) Nvidia NIM")
-        print("  4) Local fallback (no API)")
-        choice = _ask_choice({"1", "2", "3", "4"}, default="1")
+    try:
+        if RICH_AVAILABLE:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.prompt import Prompt, Confirm
+            from rich.text import Text
+            console = Console()
+            console.print()
+            console.print(Panel("[bold #ffb000]Justin Setup Wizard[/bold #ffb000]", border_style="#d28d00", expand=False))
+            console.print("Choose your provider:")
+            console.print("  [bold #ffb000]1)[/bold #ffb000] OPENAI")
+            console.print("  [bold #ffb000]2)[/bold #ffb000] Ollama")
+            console.print("  [bold #ffb000]3)[/bold #ffb000] Nvidia NIM")
+            console.print("  [bold #ffb000]4)[/bold #ffb000] Local fallback (no API)")
+            
+            # Determine default choice based on current config
+            provider_map = {
+                PROVIDER_OPENAI: "1",
+                PROVIDER_OLLAMA: "2",
+                PROVIDER_NVIDIA_NIM: "3",
+                PROVIDER_LOCAL: "4"
+            }
+            default_choice = provider_map.get(config.model_provider, "1")
+            
+            choice = Prompt.ask("Select provider", choices=["1", "2", "3", "4"], default=default_choice)
+        else:
+            print("\n=== Justin Setup Wizard ===")
+            print("Choose your provider:")
+            print("  1) OPENAI")
+            print("  2) Ollama")
+            print("  3) Nvidia NIM")
+            print("  4) Local fallback (no API)")
+            
+            provider_map = {
+                PROVIDER_OPENAI: "1",
+                PROVIDER_OLLAMA: "2",
+                PROVIDER_NVIDIA_NIM: "3",
+                PROVIDER_LOCAL: "4"
+            }
+            default_choice = provider_map.get(config.model_provider, "1")
+            choice = _ask_choice({"1", "2", "3", "4"}, default=default_choice)
 
-    if choice == "1":
-        config.model_provider = PROVIDER_OPENAI
-        config.api_base = _ask_text("OpenAI API base", default="https://api.openai.com/v1")
-        config.model_name = _ask_text("OpenAI model", default="gpt-4.1-mini")
-        config.api_key = _ask_text("OpenAI API key", secret=True)
-    elif choice == "2":
-        config.model_provider = PROVIDER_OLLAMA
-        config.api_base = _ask_text("Ollama API base", default="http://localhost:11434/v1")
-        config.model_name = _ask_text("Ollama model", default="llama3.1")
-        key = _ask_text("Ollama API key (optional, Enter to skip)", required=False, secret=True)
-        config.api_key = key or None
-    elif choice == "3":
-        config.model_provider = PROVIDER_NVIDIA_NIM
-        config.api_base = _ask_text("NVIDIA NIM API base", default="https://integrate.api.nvidia.com/v1")
-        config.model_name = _ask_text("NVIDIA model", default="meta/llama-3.1-70b-instruct")
-        config.api_key = _ask_text("NVIDIA NIM API key", secret=True)
-    else:
-        config.model_provider = PROVIDER_LOCAL
-        config.model_name = "local-fallback"
-        config.api_base = None
-        config.api_key = None
+        if choice == "1":
+            config.model_provider = PROVIDER_OPENAI
+            config.api_base = _ask_text("OpenAI API base", default=config.api_base or "https://api.openai.com/v1")
+            config.model_name = _ask_text("OpenAI model", default=config.model_name or "gpt-4.1-mini")
+            config.api_key = _ask_text("OpenAI API key", secret=True)
+        elif choice == "2":
+            config.model_provider = PROVIDER_OLLAMA
+            config.api_base = _ask_text("Ollama API base", default=config.api_base or "http://localhost:11434/v1")
+            config.model_name = _ask_text("Ollama model", default=config.model_name or "llama3.1")
+            key = _ask_text("Ollama API key (optional, Enter to skip)", required=False, secret=True)
+            config.api_key = key or None
+        elif choice == "3":
+            config.model_provider = PROVIDER_NVIDIA_NIM
+            config.api_base = _ask_text("NVIDIA NIM API base", default=config.api_base or "https://integrate.api.nvidia.com/v1")
+            config.model_name = _ask_text("NVIDIA model", default=config.model_name or "meta/llama-3.1-70b-instruct")
+            config.api_key = _ask_text("NVIDIA NIM API key", secret=True)
+        else:
+            config.model_provider = PROVIDER_LOCAL
+            config.model_name = "local-fallback"
+            config.api_base = None
+            config.api_key = None
 
-    config.save_settings()
-    _apply_env(config)
+        config.save_settings()
+        _apply_env(config)
 
-    if RICH_AVAILABLE:
-        from rich.console import Console
-        console = Console()
-        console.print(f"\n[green]✓[/green] Saved setup to [bold]{config.settings_path}[/bold]")
-        console.print("You can re-run this anytime with: [bold #f3c88d]Justin setup[/bold #f3c88d]\n")
-    else:
-        print(f"Saved setup to {config.settings_path}")
-        print("You can re-run this anytime with: Justin setup\n")
-        
-    return config
+        if RICH_AVAILABLE:
+            from rich.console import Console
+            console = Console()
+            console.print(f"\n[green]✓[/green] Saved setup to [bold]{config.settings_path}[/bold]")
+            console.print("You can re-run this anytime with: [bold #f3c88d]Justin setup[/bold #f3c88d]\n")
+        else:
+            print(f"Saved setup to {config.settings_path}")
+            print("You can re-run this anytime with: Justin setup\n")
+            
+        return config
+    except KeyboardInterrupt:
+        if RICH_AVAILABLE:
+            from rich.console import Console
+            console = Console()
+            console.print("\n[dim]Setup cancelled by user.[/dim]")
+        else:
+            print("\nSetup cancelled by user.")
+        return config
 
 
 def _apply_env(config: AgentConfig) -> None:
