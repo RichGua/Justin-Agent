@@ -12,6 +12,7 @@ class MemoryKind(StrEnum):
     PREFERENCE = "preference"
     GOAL = "goal"
     PROJECT = "project"
+    LESSON = "lesson"
 
 
 class CandidateStatus(StrEnum):

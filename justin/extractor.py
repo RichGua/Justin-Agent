@@ -28,6 +28,7 @@ class HeuristicMemoryExtractor:
         candidates.extend(self._extract_preferences(content))
         candidates.extend(self._extract_goals(content))
         candidates.extend(self._extract_projects(content))
+        candidates.extend(self._extract_lessons(content))
 
         unique: dict[tuple[str, str], CandidateDraft] = {}
         for candidate in candidates:
@@ -130,6 +131,19 @@ class HeuristicMemoryExtractor:
             re.compile(r"\bmy project is (?P<body>[^,.!?]+)", re.IGNORECASE),
         ]
         return self._capture(patterns, MemoryKind.PROJECT, text, confidence=0.82)
+
+    def _extract_lessons(self, text: str) -> list[CandidateDraft]:
+        patterns = [
+            re.compile(r"我学到了(?P<body>[^，。.!?]+)"),
+            re.compile(r"我发现(?P<body>[^，。.!?]+)"),
+            re.compile(r"经验是(?P<body>[^，。.!?]+)"),
+            re.compile(r"下次应该(?P<body>[^，。.!?]+)"),
+            re.compile(r"请记住这个教训[：:](?P<body>[^，。.!?]+)"),
+            re.compile(r"\bi learned that (?P<body>[^,.!?]+)", re.IGNORECASE),
+            re.compile(r"\bthe lesson is (?P<body>[^,.!?]+)", re.IGNORECASE),
+            re.compile(r"\bnext time (?P<body>[^,.!?]+)", re.IGNORECASE),
+        ]
+        return self._capture(patterns, MemoryKind.LESSON, text, confidence=0.88)
 
     def _capture(
         self,

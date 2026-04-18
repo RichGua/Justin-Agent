@@ -253,9 +253,29 @@ class JustinRuntime:
         tools_schema = self._build_tools_schema()
         intermediate_messages = []
 
+        import concurrent.futures
+        import json
+
         for i in range(25):  # Max tool call iterations
             if status_callback:
                 status_callback(f"Reasoning (turn {i+1})...")
+
+            # Anthropic Context Reset / Sprint concept
+            if i > 0 and i % 8 == 0:
+                if status_callback:
+                    status_callback(f"Context Reset (turn {i+1})...")
+                sprint_summary = "System Context Reset. Actions taken in the last sprint:\n"
+                for msg in intermediate_messages:
+                    if msg.get("role") == "tool":
+                        content_preview = str(msg.get("content", ""))[:200].replace("\n", " ")
+                        sprint_summary += f"- Tool {msg.get('name')} returned: {content_preview}...\n"
+                sprint_summary += "Please continue working on the task."
+                
+                intermediate_messages.clear()
+                intermediate_messages.append({
+                    "role": "system",
+                    "content": sprint_summary
+                })
 
             if i == 20:
                 intermediate_messages.append({
@@ -312,17 +332,33 @@ class JustinRuntime:
                 "tool_calls": tool_calls_dicts
             })
             
-            # Let's execute the tools
-            for tc in response.tool_calls:
-                if status_callback:
-                    status_callback(f"Using tool: {tc.name}...")
-                import json
-                try:
-                    arguments = json.loads(tc.arguments)
-                except json.JSONDecodeError:
-                    arguments = {}
+            # Let's execute the tools concurrently
+            tool_results = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(response.tool_calls))) as executor:
+                future_to_tc = {}
+                for tc in response.tool_calls:
+                    try:
+                        arguments = json.loads(tc.arguments)
+                    except json.JSONDecodeError:
+                        arguments = {}
 
-                result = self.tool_registry.execute(tc.name, arguments, self._tool_context(session.id))
+                    if status_callback:
+                        status_callback(f"Using tool: {tc.name}...")
+                        
+                    future = executor.submit(self.tool_registry.execute, tc.name, arguments, self._tool_context(session.id))
+                    future_to_tc[future] = (tc, arguments)
+
+                # Maintain the original order of tool calls
+                for future in future_to_tc:
+                    tc, arguments = future_to_tc[future]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        from .tools import ToolResult
+                        result = ToolResult(ok=False, output={"error": str(e)}, summary=f"Failed to execute tool {tc.name}", error=str(e), meta={})
+                    tool_results.append((tc, arguments, result))
+
+            for tc, arguments, result in tool_results:
                 output = result.output if isinstance(result.output, dict) else {"value": result.output}
                 event = self.store.add_tool_event(
                     session_id=session.id,
