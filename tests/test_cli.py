@@ -40,8 +40,8 @@ class CLITests(unittest.TestCase):
         )
 
         try:
-            # openai -> choose default base/model -> provide key
-            with patch("builtins.input", side_effect=["1", "", "", "sk-test-123"]):
+            # openai -> choose default base -> provide key -> choose model
+            with patch("builtins.input", side_effect=["1", "", "sk-test-123", "gpt-4.1-mini"]):
                 updated = run_setup_wizard(config)
         finally:
             rmtree(temp_dir, ignore_errors=True)
