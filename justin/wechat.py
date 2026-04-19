@@ -56,7 +56,7 @@ async def _api_get(
         if not resp.ok:
             text = await resp.text()
             raise RuntimeError(f"HTTP {resp.status}: {text[:200]}")
-        return await resp.json()
+        return await resp.json(content_type=None)
 
 
 async def _api_post(
@@ -90,7 +90,7 @@ async def _api_post(
         if not resp.ok:
             text = await resp.text()
             raise RuntimeError(f"HTTP {resp.status}: {text[:200]}")
-        return await resp.json()
+        return await resp.json(content_type=None)
 
 
 async def qr_login() -> dict[str, str] | None:
