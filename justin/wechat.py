@@ -46,8 +46,9 @@ async def _api_get(
     timeout_ms: int,
 ) -> dict[str, Any]:
     url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+    app_id = _config.wechat_app_id if _config else "ilink_app_1"
     headers = {
-        "iLink-App-Id": "ilink_app_1",
+        "iLink-App-Id": app_id,
         "iLink-App-ClientVersion": "1.0.0",
     }
     timeout = aiohttp.ClientTimeout(total=timeout_ms / 1000.0)
@@ -71,11 +72,12 @@ async def _api_post(
     # Minimal base info required by iLink
     body_obj = {**payload, "base_info": {"channel_version": "1.0.0"}}
     body = json.dumps(body_obj).encode("utf-8")
-    
+
+    app_id = _config.wechat_app_id if _config else "ilink_app_1"
     headers = {
         "Content-Type": "application/json",
         "Content-Length": str(len(body)),
-        "iLink-App-Id": "ilink_app_1",
+        "iLink-App-Id": app_id,
         "iLink-App-ClientVersion": "1.0.0",
         "X-WECHAT-UIN": str(random.randint(1000000, 9999999)),
     }
@@ -102,6 +104,8 @@ async def qr_login() -> dict[str, str] | None:
                 timeout_ms=QR_TIMEOUT_MS,
             )
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             print(f"[WeChat] Failed to fetch QR code: {exc}")
             return None
 
@@ -294,6 +298,10 @@ async def _poll_loop(
                             
                             # Send reply back to WeChat
                             reply_text = result.assistant_message.content
+                            prefix = _config.wechat_auto_reply_prefix if _config and _config.wechat_auto_reply_prefix else ""
+                            if prefix and not reply_text.startswith(prefix):
+                                reply_text = f"{prefix}{reply_text}"
+                                
                             await _send_message(
                                 session,
                                 base_url,

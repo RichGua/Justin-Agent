@@ -54,6 +54,16 @@ class AgentConfig:
     network_tools_enabled: bool = True
     shell_allowed_programs: str = "git,rg,where"
     tool_max_output_chars: int = 4000
+    
+    # WeChat settings
+    wechat_enabled: bool = False
+    wechat_app_id: str = "ilink_app_1"
+    wechat_auto_reply_prefix: str = "[Justin] "
+    wechat_admin_user: str | None = None
+    
+    # Agent Identity
+    agent_name: str = "Justin"
+    system_prompt_prefix: str = "You are {agent_name}, a practical local-first agent."
 
     def __post_init__(self) -> None:
         if self.settings_path is None:
@@ -116,6 +126,12 @@ class AgentConfig:
             not in {"0", "false", "False"},
             shell_allowed_programs=_pick("JUSTIN_SHELL_ALLOWED_PROGRAMS", "shell_allowed_programs", "git,rg,where"),
             tool_max_output_chars=int(_pick("JUSTIN_TOOL_MAX_OUTPUT_CHARS", "tool_max_output_chars", "4000")),
+            wechat_enabled=str(_pick("JUSTIN_WECHAT_ENABLED", "wechat_enabled", "false")).lower() in {"1", "true", "yes"},
+            wechat_app_id=_pick("JUSTIN_WECHAT_APP_ID", "wechat_app_id", "ilink_app_1"),
+            wechat_auto_reply_prefix=_pick("JUSTIN_WECHAT_AUTO_REPLY_PREFIX", "wechat_auto_reply_prefix", "[Justin] "),
+            wechat_admin_user=_pick("JUSTIN_WECHAT_ADMIN_USER", "wechat_admin_user"),
+            agent_name=_pick("JUSTIN_AGENT_NAME", "agent_name", "Justin"),
+            system_prompt_prefix=_pick("JUSTIN_SYSTEM_PROMPT_PREFIX", "system_prompt_prefix", "You are {agent_name}, a practical local-first agent."),
         )
 
     def ensure_directories(self) -> None:
@@ -154,6 +170,12 @@ class AgentConfig:
             "network_tools_enabled": self.network_tools_enabled,
             "shell_allowed_programs": self.shell_allowed_programs,
             "tool_max_output_chars": self.tool_max_output_chars,
+            "wechat_enabled": self.wechat_enabled,
+            "wechat_app_id": self.wechat_app_id,
+            "wechat_auto_reply_prefix": self.wechat_auto_reply_prefix,
+            "wechat_admin_user": self.wechat_admin_user,
+            "agent_name": self.agent_name,
+            "system_prompt_prefix": self.system_prompt_prefix,
         }
 
     def save_settings(self) -> None:

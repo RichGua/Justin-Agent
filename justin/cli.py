@@ -909,7 +909,7 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
             }
             default_choice = "0" if has_config else provider_map.get(config.model_provider, "1")
             choices = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"} if has_config else {"1", "2", "3", "4", "5", "6", "7", "8", "9"}
-            choice = _ask_choice(choices, default=default_choice)
+            choice = _ask_choice("Select provider", choices, default=default_choice)
 
         if choice == "0":
             if RICH_AVAILABLE:
@@ -964,6 +964,35 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
             config.api_base = None
             config.api_key = None
 
+        # WeChat Setup
+        if RICH_AVAILABLE:
+            from rich.prompt import Confirm
+            console.print("\n[bold #ffb000]Agent Identity[/bold #ffb000]")
+            config.agent_name = _ask_text("Agent Name", default=config.agent_name or "Justin")
+            config.system_prompt_prefix = _ask_text("System Prompt Prefix", default=config.system_prompt_prefix or f"You are {config.agent_name}, a practical local-first agent.")
+            
+            console.print("\n[bold #ffb000]WeChat Integration[/bold #ffb000]")
+            enable_wechat = Confirm.ask("Do you want to enable WeChat integration?", default=config.wechat_enabled)
+            config.wechat_enabled = enable_wechat
+            if enable_wechat:
+                config.wechat_app_id = _ask_text("iLink App ID", default=config.wechat_app_id or "ilink_app_1")
+                config.wechat_auto_reply_prefix = _ask_text("Auto-reply prefix", default=config.wechat_auto_reply_prefix or f"[{config.agent_name}] ")
+                admin_user = _ask_text("Admin user ID (optional, Enter to skip)", required=False)
+                config.wechat_admin_user = admin_user or None
+        else:
+            print("\n=== Agent Identity ===")
+            config.agent_name = _ask_text("Agent Name", default=config.agent_name or "Justin")
+            config.system_prompt_prefix = _ask_text("System Prompt Prefix", default=config.system_prompt_prefix or f"You are {config.agent_name}, a practical local-first agent.")
+            
+            print("\n=== WeChat Integration ===")
+            enable_wechat = _ask_choice("Enable WeChat integration?", {"y", "n"}, default="y" if config.wechat_enabled else "n") == "y"
+            config.wechat_enabled = enable_wechat
+            if enable_wechat:
+                config.wechat_app_id = _ask_text("iLink App ID", default=config.wechat_app_id or "ilink_app_1")
+                config.wechat_auto_reply_prefix = _ask_text("Auto-reply prefix", default=config.wechat_auto_reply_prefix or f"[{config.agent_name}] ")
+                admin_user = _ask_text("Admin user ID (optional, Enter to skip)", required=False)
+                config.wechat_admin_user = admin_user or None
+
         config.save_settings()
         _apply_env(config)
 
@@ -1007,9 +1036,9 @@ def _apply_env(config: AgentConfig) -> None:
         os.environ.pop("JUSTIN_API_KEY", None)
 
 
-def _ask_choice(allowed: set[str], default: str) -> str:
+def _ask_choice(prompt_text: str, allowed: set[str], default: str) -> str:
     while True:
-        raw = input(f"Select provider [{default}]: ").strip()
+        raw = input(f"{prompt_text} [{default}]: ").strip()
         picked = raw or default
         if picked in allowed:
             return picked

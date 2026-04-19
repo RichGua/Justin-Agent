@@ -29,10 +29,11 @@ class ContextAssembly:
 
 
 class ConversationContextBuilder:
-    def __init__(self, store, policy: ContextBudgetPolicy, chat_provider: 'ChatProvider') -> None:
+    def __init__(self, store, policy: ContextBudgetPolicy, chat_provider: 'ChatProvider', config: "AgentConfig") -> None:
         self.store = store
         self.policy = policy
         self.chat_provider = chat_provider
+        self.config = config
 
     def build(
         self,
@@ -57,6 +58,7 @@ class ConversationContextBuilder:
             tool_event_block=tool_event_block,
             activated_skill_block=activated_skill_block,
             citation_block=citation_block,
+            config=self.config,
         )
 
         raw_context_text = "\n".join(message.content for message in messages)
@@ -211,9 +213,11 @@ class ConversationContextBuilder:
         tool_event_block: str,
         activated_skill_block: str,
         citation_block: str,
+        config: "AgentConfig",
     ) -> str:
+        prefix = config.system_prompt_prefix.replace("{agent_name}", config.agent_name)
         blocks = [
-            "You are Justin, a practical local-first agent.",
+            prefix,
             "Prefer concise answers. Use tool evidence when available instead of speculating.",
             "If current-turn evidence contains source labels like [S1], cite them inline when relevant.",
             f"Approved memories:\n{memory_block}",
