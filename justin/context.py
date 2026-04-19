@@ -134,9 +134,16 @@ class ConversationContextBuilder:
         messages = self.store.list_messages(session_id)
         if not messages:
             return "No messages to compact."
+        
+        # Determine how many messages to keep. If there are fewer than 3, no need to compact.
+        keep_latest = 2
+        if len(messages) <= keep_latest:
+            return "Context is already compact enough."
+            
         summary = self._summarize_messages(messages)
-        self.store.upsert_session_summary(session_id, summary, source_message_count=len(messages))
-        # Optional: could delete older messages to really compact the DB
+        self.store.upsert_session_summary(session_id, summary, source_message_count=keep_latest)
+        self.store.delete_old_messages(session_id, keep_latest=keep_latest)
+        
         return summary
 
     def _select_recent_messages(

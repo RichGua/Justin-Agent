@@ -309,11 +309,21 @@ class JustinRuntime:
 
             response = self.chat_provider.generate(payload)
 
+            if response.reasoning_content and status_callback:
+                # Optionally send a short snippet of reasoning via status
+                status_callback(f"Reasoning: {response.reasoning_content[:100]}...")
+
             if not response.tool_calls:
                 response_text = response.content
+                if response.reasoning_content:
+                    response_text = f"**[Reasoning]**\n{response.reasoning_content}\n\n{response_text}"
                 break
 
             # Execute tool calls
+            content_with_reasoning = response.content or ""
+            if response.reasoning_content:
+                content_with_reasoning = f"**[Reasoning]**\n{response.reasoning_content}\n\n{content_with_reasoning}"
+                
             tool_calls_dicts = []
             for tc in response.tool_calls:
                 tool_calls_dicts.append({
@@ -328,7 +338,7 @@ class JustinRuntime:
             # Append assistant message with tool_calls
             intermediate_messages.append({
                 "role": "assistant",
-                "content": response.content or "",
+                "content": content_with_reasoning,
                 "tool_calls": tool_calls_dicts
             })
             
