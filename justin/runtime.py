@@ -214,6 +214,7 @@ class JustinRuntime:
         content: str,
         session_id: str | None = None,
         status_callback: Callable[[str], None] | None = None,
+        auto_mode: bool = False,
     ) -> AgentTurnResult:
         if status_callback:
             status_callback("Initializing session...")
@@ -256,7 +257,9 @@ class JustinRuntime:
         import concurrent.futures
         import json
 
-        for i in range(25):  # Max tool call iterations
+        max_iterations = 100 if auto_mode else 25
+
+        for i in range(max_iterations):  # Max tool call iterations
             if status_callback:
                 status_callback(f"Reasoning (turn {i+1})...")
 
@@ -277,10 +280,13 @@ class JustinRuntime:
                     "content": sprint_summary
                 })
 
-            if i == 20:
+            if i == max_iterations - 5:
                 intermediate_messages.append({
                     "role": "user",
-                    "content": "[SYSTEM WARNING] You have reached iteration 20. You MUST stop using tools and provide a final answer immediately to avoid an infinite loop."
+                    "content": (
+                        "SYSTEM WARNING: You have made many consecutive tool calls. "
+                        "Please finish your task and provide a final answer to the user in the next turn."
+                    )
                 })
             context = self.context_builder.build(
                 session_id=session.id,
@@ -397,6 +403,34 @@ class JustinRuntime:
             
         else:
             response_text = response.content or "Tool call limit reached."
+
+        if auto_mode and i > 1:
+            try:
+                # Ask model for reflection
+                prompt = "Summarize the task you just completed, highlighting the key lessons learned or useful facts discovered. Return ONLY the summary."
+                if status_callback:
+                    status_callback("Reflecting on task...")
+                    
+                req = ChatRequest(
+                    system_prompt="You are an expert self-reflection engine.",
+                    conversation=[
+                        {"role": "user", "content": content},
+                        {"role": "assistant", "content": response_text},
+                        {"role": "user", "content": prompt}
+                    ],
+                    tools=[],
+                    memory_snippets=[],
+                    latest_user_message=prompt,
+                    citations=[],
+                    tool_events=[],
+                    activated_skills=[]
+                )
+                reflection_resp = self.chat_provider.generate(req)
+                if reflection_resp.content:
+                    self.store.add_memory(kind="lesson", content=reflection_resp.content, source_session_id=session.id)
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to generate reflection: {e}")
 
         if status_callback:
             status_callback("Finalizing response...")

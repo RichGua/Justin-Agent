@@ -431,6 +431,28 @@ class AgentStore:
             rows = self._conn.execute(query, params).fetchall()
         return [self._row_to_memory(row) for row in rows]
 
+    def add_memory(self, kind: str, content: str, source_session_id: str | None = None) -> MemoryRecord:
+        candidate = self.create_candidate(
+            kind=kind,
+            content=content,
+            evidence="Self-reflection",
+            confidence=1.0,
+            source_session_id=source_session_id,
+        )
+        if candidate.status == CandidateStatus.PENDING:
+            return self.confirm_candidate(candidate.id)
+        
+        # If it was already confirmed, return it
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM memories WHERE id = ?",
+                (candidate.id,),
+            ).fetchone()
+            if row:
+                return self._row_to_memory(row)
+                
+        return self.confirm_candidate(candidate.id)
+
     def search_memories(self, query: str, top_k: int = 5, kinds: list[str] | None = None) -> list[RetrievedMemory]:
         base_memories = self.list_memories(limit=500)
         if kinds:
