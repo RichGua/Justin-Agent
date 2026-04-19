@@ -4,6 +4,7 @@ import subprocess
 import time
 import os
 import signal
+from typing import Callable
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -46,7 +47,8 @@ class ExecutionPolicy:
     allow_harness: bool = True
     command_timeout_sec: int = 60
     network_enabled: bool = True
-    max_output_chars: int = 4000
+    max_output_chars: int = 65536
+    confirm_callback: Callable[[str, str], bool] | None = None
 
     def allows_tool(self, name: str) -> bool:
         return not self.allowed_tools or name in self.allowed_tools
@@ -90,7 +92,21 @@ class ToolRegistry:
 
     def execute(self, name: str, arguments: dict[str, object], context: ToolContext) -> ToolResult:
         if not self.policy.allows_tool(name):
-            raise PermissionError(f"Tool '{name}' is disabled by policy.")
+            raise PermissionError(f"Tool '{name}' is not allowed by current policy.")
+            
+        if self.policy.confirm_callback:
+            # For interactive CLI confirmation
+            import json
+            arg_str = json.dumps(arguments, ensure_ascii=False)
+            if not self.policy.confirm_callback(name, arg_str):
+                return ToolResult(
+                    ok=False,
+                    output={"error": "User denied execution"},
+                    summary=f"Execution of '{name}' denied by user.",
+                    error="Execution denied",
+                    meta={}
+                )
+
         executor = self._executors.get(name)
         if executor is None:
             raise KeyError(f"Unknown tool: {name}")
