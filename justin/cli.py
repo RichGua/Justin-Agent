@@ -237,14 +237,28 @@ class JustinCliRenderer:
         elif not RICH_AVAILABLE and self.interactive:
             print(f"... {message}", file=sys.stderr, flush=True)
 
-    def show_assistant_message(self, content: str) -> None:
+    def show_assistant_message(self, content: str, reasoning_content: str | None = None) -> None:
         if not self.interactive:
             return
         if not RICH_AVAILABLE:
+            if reasoning_content:
+                print(f"\n[Reasoning]\n{reasoning_content}\n")
             print(f"\nJustin> {content}\n")
             return
 
         panel_width = self._panel_width()
+        
+        if reasoning_content:
+            self.console.print(
+                Panel(
+                    Text(reasoning_content, style="dim white"),
+                    title="[dim italic]Reasoning[/dim italic]",
+                    border_style="dim white",
+                    padding=(0, 1),
+                    width=panel_width,
+                )
+            )
+            
         self.console.print(
             Panel(
                 Text(content, style="white"),
@@ -719,7 +733,7 @@ def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | Non
         renderer.show_tool_events(result.tool_events)
         renderer.show_citations(result.citations)
         renderer.show_activated_skills(result.activated_skills)
-        renderer.show_assistant_message(result.assistant_message.content)
+        renderer.show_assistant_message(result.assistant_message.content, reasoning_content=result.reasoning_content)
         renderer.show_candidates(result.candidates)
         renderer.show_context_telemetry(result.context_telemetry, runtime.config)
         

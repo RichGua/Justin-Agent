@@ -321,15 +321,11 @@ class JustinRuntime:
 
             if not response.tool_calls:
                 response_text = response.content
-                if response.reasoning_content:
-                    response_text = f"**[Reasoning]**\n{response.reasoning_content}\n\n{response_text}"
                 break
 
             # Execute tool calls
             content_with_reasoning = response.content or ""
-            if response.reasoning_content:
-                content_with_reasoning = f"**[Reasoning]**\n{response.reasoning_content}\n\n{content_with_reasoning}"
-                
+            
             tool_calls_dicts = []
             for tc in response.tool_calls:
                 tool_calls_dicts.append({
@@ -460,6 +456,7 @@ class JustinRuntime:
             citations=citations,
             activated_skills=activated_skills,
             context_telemetry=context.telemetry,
+            reasoning_content=response.reasoning_content,
         )
 
     def _build_tools_schema(self) -> list[dict[str, object]]:

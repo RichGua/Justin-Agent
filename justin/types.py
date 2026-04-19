@@ -166,6 +166,7 @@ class AgentTurnResult:
     citations: list[Citation] = field(default_factory=list)
     activated_skills: list[InstalledSkill] = field(default_factory=list)
     context_telemetry: ContextTelemetry | None = None
+    reasoning_content: str | None = None
 
 
 @dataclass(slots=True)
