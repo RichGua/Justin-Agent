@@ -209,6 +209,14 @@ class JustinRuntime:
         self.skill_manager = bundle.skill_manager
         self.extensions = bundle.extensions
 
+    def _chunk_handler(self, status_callback: Callable[[str], None]) -> Callable[[str, bool], None]:
+        def handle(chunk: str, is_reasoning: bool):
+            if is_reasoning:
+                pass # Silent reasoning
+            else:
+                pass # we don't have true streaming UI right now without breaking tools
+        return handle
+
     def send_message(
         self,
         content: str,
@@ -313,7 +321,10 @@ class JustinRuntime:
                 tools=tools_schema,
             )
 
-            response = self.chat_provider.generate(payload)
+            response = self.chat_provider.generate(
+                payload, 
+                chunk_callback=self._chunk_handler(status_callback) if status_callback else None
+            )
 
             if response.reasoning_content and status_callback:
                 # Optionally send a short snippet of reasoning via status
