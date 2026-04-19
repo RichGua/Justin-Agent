@@ -7,8 +7,8 @@ from pathlib import Path
 from shutil import rmtree
 from unittest.mock import MagicMock, patch
 
-from justin.cli import _run_chat, main, run_setup_wizard
-from justin.config import AgentConfig, PROVIDER_OPENAI
+from justin.cli import _run_chat, main, run_gateway_setup_wizard, run_setup_wizard
+from justin.config import AgentConfig, PROVIDER_OPENAI, WECHAT_ACCESS_ALLOWLIST
 
 
 class CLITests(unittest.TestCase):
@@ -56,6 +56,37 @@ class CLITests(unittest.TestCase):
         self.assertEqual(updated.api_base, "https://api.openai.com/v1")
         self.assertEqual(updated.model_name, "gpt-4.1-mini")
         self.assertEqual(updated.api_key, "sk-test-123")
+
+    def test_gateway_setup_wizard_configures_allowlist_without_pairing(self) -> None:
+        root = Path.cwd() / ".tmp_tests"
+        root.mkdir(exist_ok=True)
+        temp_dir = root / f"gateway_{uuid.uuid4().hex[:8]}"
+        temp_dir.mkdir()
+        config = AgentConfig(
+            home_dir=temp_dir,
+            database_path=temp_dir / "agent.db",
+            settings_path=temp_dir / "settings.json",
+        )
+
+        try:
+            import justin.cli
+
+            original_rich = justin.cli.RICH_AVAILABLE
+            justin.cli.RICH_AVAILABLE = False
+            with patch(
+                "builtins.input",
+                side_effect=["y", "", "", "2", "wx_admin", "alice,bob", "n"],
+            ):
+                updated = run_gateway_setup_wizard(config)
+        finally:
+            justin.cli.RICH_AVAILABLE = original_rich
+            rmtree(temp_dir, ignore_errors=True)
+
+        self.assertTrue(updated.wechat_enabled)
+        self.assertEqual(updated.wechat_app_id, "ilink_app_1")
+        self.assertEqual(updated.wechat_access_policy, WECHAT_ACCESS_ALLOWLIST)
+        self.assertEqual(updated.wechat_admin_user, "wx_admin")
+        self.assertEqual(updated.wechat_allowed_users, "alice,bob")
 
     def test_run_chat_prints_timeout_hint(self) -> None:
         runtime = MagicMock()

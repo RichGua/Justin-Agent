@@ -13,12 +13,20 @@ PROVIDER_OPENAI = "openai"
 PROVIDER_OPENAI_COMPATIBLE = "openai-compatible"
 PROVIDER_OLLAMA = "ollama"
 PROVIDER_NVIDIA_NIM = "nvidia-nim"
+WECHAT_ACCESS_OPEN = "open"
+WECHAT_ACCESS_ALLOWLIST = "allowlist"
+WECHAT_ACCESS_DISABLED = "disabled"
 SUPPORTED_PROVIDERS = {
     PROVIDER_LOCAL,
     PROVIDER_OPENAI,
     PROVIDER_OPENAI_COMPATIBLE,
     PROVIDER_OLLAMA,
     PROVIDER_NVIDIA_NIM,
+}
+SUPPORTED_WECHAT_ACCESS_POLICIES = {
+    WECHAT_ACCESS_OPEN,
+    WECHAT_ACCESS_ALLOWLIST,
+    WECHAT_ACCESS_DISABLED,
 }
 
 
@@ -60,6 +68,8 @@ class AgentConfig:
     wechat_app_id: str = "ilink_app_1"
     wechat_auto_reply_prefix: str = "[Justin] "
     wechat_admin_user: str | None = None
+    wechat_access_policy: str = WECHAT_ACCESS_OPEN
+    wechat_allowed_users: str = ""
     
     # Agent Identity
     agent_name: str = "Justin"
@@ -70,6 +80,8 @@ class AgentConfig:
             self.settings_path = self.home_dir / DEFAULT_SETTINGS_FILENAME
         if self.skills_dir is None:
             self.skills_dir = self.home_dir / "skills"
+        if self.wechat_access_policy not in SUPPORTED_WECHAT_ACCESS_POLICIES:
+            self.wechat_access_policy = WECHAT_ACCESS_OPEN
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -83,6 +95,13 @@ class AgentConfig:
         model_provider = _pick("JUSTIN_MODEL_PROVIDER", "model_provider", PROVIDER_LOCAL)
         if model_provider not in SUPPORTED_PROVIDERS:
             model_provider = PROVIDER_LOCAL
+        wechat_access_policy = _pick(
+            "JUSTIN_WECHAT_ACCESS_POLICY",
+            "wechat_access_policy",
+            WECHAT_ACCESS_OPEN,
+        )
+        if wechat_access_policy not in SUPPORTED_WECHAT_ACCESS_POLICIES:
+            wechat_access_policy = WECHAT_ACCESS_OPEN
 
         return cls(
             home_dir=home_dir,
@@ -130,6 +149,8 @@ class AgentConfig:
             wechat_app_id=_pick("JUSTIN_WECHAT_APP_ID", "wechat_app_id", "ilink_app_1"),
             wechat_auto_reply_prefix=_pick("JUSTIN_WECHAT_AUTO_REPLY_PREFIX", "wechat_auto_reply_prefix", "[Justin] "),
             wechat_admin_user=_pick("JUSTIN_WECHAT_ADMIN_USER", "wechat_admin_user"),
+            wechat_access_policy=wechat_access_policy,
+            wechat_allowed_users=_pick("JUSTIN_WECHAT_ALLOWED_USERS", "wechat_allowed_users", ""),
             agent_name=_pick("JUSTIN_AGENT_NAME", "agent_name", "Justin"),
             system_prompt_prefix=_pick("JUSTIN_SYSTEM_PROMPT_PREFIX", "system_prompt_prefix", "You are {agent_name}, a practical local-first agent."),
         )
@@ -137,6 +158,7 @@ class AgentConfig:
     def ensure_directories(self) -> None:
         self.home_dir.mkdir(parents=True, exist_ok=True)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
+        self.wechat_accounts_dir().mkdir(parents=True, exist_ok=True)
 
     def has_user_settings(self) -> bool:
         return self.settings_path.exists()
@@ -174,6 +196,8 @@ class AgentConfig:
             "wechat_app_id": self.wechat_app_id,
             "wechat_auto_reply_prefix": self.wechat_auto_reply_prefix,
             "wechat_admin_user": self.wechat_admin_user,
+            "wechat_access_policy": self.wechat_access_policy,
+            "wechat_allowed_users": self.wechat_allowed_users,
             "agent_name": self.agent_name,
             "system_prompt_prefix": self.system_prompt_prefix,
         }
@@ -191,3 +215,26 @@ class AgentConfig:
             return json.loads(path.read_text(encoding="utf-8-sig"))
         except (json.JSONDecodeError, OSError):
             return {}
+
+    def gateway_state_dir(self) -> Path:
+        return self.home_dir / "gateway"
+
+    def wechat_state_dir(self) -> Path:
+        return self.gateway_state_dir() / "wechat"
+
+    def wechat_accounts_dir(self) -> Path:
+        return self.wechat_state_dir() / "accounts"
+
+    def wechat_active_account_path(self) -> Path:
+        return self.wechat_state_dir() / "active_account.json"
+
+    def parse_wechat_allowed_users(self) -> list[str]:
+        seen: set[str] = set()
+        users: list[str] = []
+        raw_values = (self.wechat_allowed_users or "").replace("\n", ",").split(",")
+        for item in raw_values:
+            normalized = item.strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                users.append(normalized)
+        return users
