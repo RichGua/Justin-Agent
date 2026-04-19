@@ -241,24 +241,14 @@ class JustinCliRenderer:
         if not self.interactive:
             return
         if not RICH_AVAILABLE:
-            if reasoning_content:
-                print(f"\n[Reasoning]\n{reasoning_content}\n")
+            # Hide reasoning content from raw CLI output to prevent overwhelming the screen
             print(f"\nJustin> {content}\n")
             return
 
         panel_width = self._panel_width()
-        
-        if reasoning_content:
-            self.console.print(
-                Panel(
-                    Text(reasoning_content, style="dim white"),
-                    title="[dim italic]Reasoning[/dim italic]",
-                    border_style="dim white",
-                    padding=(0, 1),
-                    width=panel_width,
-                )
-            )
-            
+
+        # Render only the actual content, skipping reasoning content for UI cleanliness
+        # The reasoning process still happens behind the scenes in the LLM.
         self.console.print(
             Panel(
                 Text(content, style="white"),
