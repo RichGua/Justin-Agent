@@ -163,8 +163,6 @@ class OpenAICompatibleChatProvider(ChatProvider):
         first_choice = choices[0] if isinstance(choices[0], dict) else {}
         if first_choice.get("finish_reason") != "length":
             return False
-        if self._choice_has_final_text(first_choice):
-            return False
 
         next_tokens = self._next_retry_max_tokens(self.max_tokens)
         return next_tokens > max(self.max_tokens, 0)
