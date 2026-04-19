@@ -497,6 +497,11 @@ class JustinCliRenderer:
                 "Try: 1) /new for a fresh session, 2) increase JUSTIN_MODEL_TIMEOUT_SECONDS, "
                 "3) lower JUSTIN_MODEL_MAX_TOKENS, or run `Justin setup` to switch providers."
             )
+        elif "tls handshake eof" in lowered or "stream disconnected before completion" in lowered:
+            message = (
+                f"Justin request failed after {elapsed_seconds:.1f}s: the model stream dropped during TLS setup. "
+                "Check JUSTIN_API_BASE and clear any broken HTTP(S)_PROXY/VPN settings, then retry."
+            )
         elif "remote end closed connection" in lowered or "connection closed by remote server" in lowered:
             message = (
                 f"Justin request failed after {elapsed_seconds:.1f}s: remote server closed the connection. "

@@ -4,11 +4,26 @@ import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .config import AgentConfig
 from .runtime import JustinRuntime, build_runtime_bundle
 from .types import to_plain_dict
+
+
+def _resolve_static_file(web_dir: Path, request_path: str) -> Path | None:
+    root = web_dir.resolve()
+    relative_path = "index.html" if request_path in {"/", ""} else unquote(request_path).lstrip("/")
+    candidate = (root / relative_path).resolve()
+
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    return candidate
 
 
 def build_server(runtime: JustinRuntime, host: str, port: int) -> ThreadingHTTPServer:
@@ -119,12 +134,8 @@ def build_server(runtime: JustinRuntime, host: str, port: int) -> ThreadingHTTPS
             self.wfile.write(body)
 
         def _serve_static(self, path: str, web_dir: Path) -> None:
-            if path in {"/", ""}:
-                file_path = web_dir / "index.html"
-            else:
-                file_path = web_dir / path.lstrip("/")
-
-            if not file_path.exists() or not file_path.is_file():
+            file_path = _resolve_static_file(web_dir, path)
+            if file_path is None:
                 return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
             body = file_path.read_bytes()
