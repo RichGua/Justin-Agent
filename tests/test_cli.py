@@ -44,8 +44,9 @@ class CLITests(unittest.TestCase):
             original_rich = justin.cli.RICH_AVAILABLE
             justin.cli.RICH_AVAILABLE = False
             
-            # openai -> choose default base -> provide key -> choose model
-            with patch("builtins.input", side_effect=["1", "", "sk-test-123", "gpt-4.1-mini"]):
+            # 1: openai -> "": default base -> "sk-test-123": provide key -> "gpt-4.1-mini": choose model
+            # "": Agent Name -> "": System Prompt Prefix -> "n": WeChat Integration
+            with patch("builtins.input", side_effect=["1", "", "sk-test-123", "gpt-4.1-mini", "", "", "n"]):
                 updated = run_setup_wizard(config)
         finally:
             justin.cli.RICH_AVAILABLE = original_rich
