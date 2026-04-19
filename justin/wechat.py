@@ -115,7 +115,10 @@ async def qr_login() -> dict[str, str] | None:
             print("[WeChat] QR response missing qrcode token")
             return None
 
-        qr_scan_data = qrcode_url if qrcode_url else qrcode_value
+        # WeChat requires the raw `qrcode_value` (the short token) to be encoded in the QR for scanning.
+        # `qrcode_img_content` is sometimes provided as a base64 image or a long URL, but scanning it 
+        # often leads to a network error because the iLink Bot device flow expects the raw token.
+        qr_scan_data = qrcode_value
 
         print("\nPlease scan the following QR code with WeChat:")
         if qrcode_url:
@@ -173,7 +176,7 @@ async def qr_login() -> dict[str, str] | None:
                     )
                     qrcode_value = str(qr_resp.get("qrcode") or "")
                     qrcode_url = str(qr_resp.get("qrcode_img_content") or "")
-                    qr_scan_data = qrcode_url if qrcode_url else qrcode_value
+                    qr_scan_data = qrcode_value
                     if qrcode_url:
                         print(qrcode_url)
                     try:
