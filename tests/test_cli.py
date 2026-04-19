@@ -85,6 +85,22 @@ class CLITests(unittest.TestCase):
         output = stderr.getvalue().lower()
         self.assertIn("remote server closed the connection", output)
 
+    def test_run_chat_prints_tls_handshake_hint(self) -> None:
+        runtime = MagicMock()
+        runtime.send_message.side_effect = RuntimeError(
+            "stream disconnected before completion: tls handshake eof"
+        )
+
+        with (
+            patch("sys.stderr", new=io.StringIO()) as stderr,
+            patch("sys.stdout", new=io.StringIO()),
+        ):
+            _run_chat(runtime, None, "hello")
+
+        output = stderr.getvalue().lower()
+        self.assertIn("tls", output)
+        self.assertIn("proxy", output)
+
 
 if __name__ == "__main__":
     unittest.main()

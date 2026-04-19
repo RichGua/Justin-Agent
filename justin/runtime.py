@@ -250,10 +250,7 @@ class JustinRuntime:
         )
         messages = self.store.list_messages(
             session.id,
-            limit=max(
-                self.config.context_messages * 3,
-                self.config.context_summary_trigger_messages + self.config.context_messages + 4,
-            ),
+            limit=None,
         )
 
         turn_tool_events: list[ToolEvent] = []

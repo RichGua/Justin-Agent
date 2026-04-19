@@ -81,22 +81,37 @@ class ConversationContextBuilder:
         )
 
     def _refresh_summary(self, session_id: str, messages: list[Message]) -> str:
-        if len(messages) <= self.policy.summary_trigger_messages:
-            stored = self.store.get_session_summary(session_id)
+        message_pairs = self.store.list_messages_with_markers(session_id, limit=None)
+        all_messages = [message for _, message in message_pairs]
+        stored = self.store.get_session_summary(session_id)
+
+        if len(all_messages) <= self.policy.summary_trigger_messages:
             return stored.summary if stored else ""
 
-        preserved = min(self.policy.recent_messages, max(len(messages) // 3, 4))
-        older_messages = messages[:-preserved]
-        if not older_messages:
-            stored = self.store.get_session_summary(session_id)
+        preserved = min(self.policy.recent_messages, max(len(all_messages) // 3, 4))
+        older_pairs = message_pairs[:-preserved]
+        if not older_pairs:
             return stored.summary if stored else ""
 
-        existing = self.store.get_session_summary(session_id)
-        if existing and existing.source_message_count == len(older_messages):
-            return existing.summary
+        older_messages = [message for _, message in older_pairs]
+        older_marker = older_pairs[-1][0]
 
-        summary = self._summarize_messages(older_messages)
-        self.store.upsert_session_summary(session_id, summary, source_message_count=len(older_messages))
+        if stored and stored.source_message_count >= older_marker:
+            return stored.summary
+
+        if stored and stored.summary:
+            delta_messages = [
+                message
+                for marker, message in older_pairs
+                if marker > stored.source_message_count
+            ]
+            if not delta_messages:
+                return stored.summary
+            summary = self._extend_summary(stored.summary, delta_messages)
+        else:
+            summary = self._summarize_messages(older_messages)
+
+        self.store.upsert_session_summary(session_id, summary, source_message_count=older_marker)
         return summary
 
     def _summarize_messages(self, messages: list[Message]) -> str:
@@ -132,8 +147,44 @@ class ConversationContextBuilder:
                 bullets.append(f"- {message.role}: {content[:140]}")
             return "\n".join(bullets[:8])
 
+    def _extend_summary(self, summary: str, messages: list[Message]) -> str:
+        prompt = (
+            "Update the existing conversation summary with the newly archived messages. "
+            "Keep durable facts, user intent, and important actions. Avoid filler.\n\n"
+            f"Existing summary:\n{summary}\n\n"
+            "Newly archived messages:\n"
+        )
+        for message in messages:
+            content = " ".join(message.content.split())
+            if not content:
+                continue
+            prompt += f"{message.role.upper()}: {content[:500]}\n"
+
+        request = ChatRequest(
+            system_prompt="You are an expert summarizer.",
+            conversation=[{"role": "user", "content": prompt}],
+            tools=[],
+            memory_snippets=[],
+            latest_user_message="",
+        )
+
+        try:
+            result = self.chat_provider.generate(request)
+            return result.content or summary
+        except Exception:
+            additions = []
+            for message in messages[-10:]:
+                content = " ".join(message.content.split())
+                if not content:
+                    continue
+                additions.append(f"- {message.role}: {content[:140]}")
+            if not additions:
+                return summary
+            return "\n".join(part for part in [summary, *additions] if part)
+
     def compact(self, session_id: str) -> str:
-        messages = self.store.list_messages(session_id)
+        message_pairs = self.store.list_messages_with_markers(session_id, limit=None)
+        messages = [message for _, message in message_pairs]
         if not messages:
             return "No messages to compact."
 
@@ -142,8 +193,31 @@ class ConversationContextBuilder:
         if len(messages) <= keep_latest:
             return "Context is already compact enough."
 
-        summary = self._summarize_messages(messages)
-        self.store.upsert_session_summary(session_id, summary, source_message_count=keep_latest)
+        compacted_pairs = message_pairs[:-keep_latest]
+        if not compacted_pairs:
+            return "Context is already compact enough."
+
+        existing = self.store.get_session_summary(session_id)
+        compacted_messages = [message for _, message in compacted_pairs]
+        compacted_marker = compacted_pairs[-1][0]
+
+        if existing and existing.source_message_count >= compacted_marker:
+            summary = existing.summary
+        elif existing and existing.summary:
+            delta_messages = [
+                message
+                for marker, message in compacted_pairs
+                if marker > existing.source_message_count
+            ]
+            summary = self._extend_summary(existing.summary, delta_messages)
+        else:
+            summary = self._summarize_messages(compacted_messages)
+
+        self.store.upsert_session_summary(
+            session_id,
+            summary,
+            source_message_count=compacted_marker,
+        )
         self.store.delete_old_messages(session_id, keep_latest=keep_latest)
 
         return summary

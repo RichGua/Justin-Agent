@@ -161,7 +161,20 @@ class AgentStore:
                 );
                 """
             )
+            self._ensure_column(
+                "memory_candidates",
+                "memory_id",
+                "TEXT REFERENCES memories(id) ON DELETE SET NULL",
+            )
             self._ensure_fts()
+
+    def _ensure_column(self, table_name: str, column_name: str, definition: str) -> None:
+        columns = {
+            row["name"]
+            for row in self._conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if column_name not in columns:
+            self._conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
 
     def _ensure_fts(self) -> None:
         try:
@@ -248,21 +261,38 @@ class AgentStore:
             )
         return message
 
-    def list_messages(self, session_id: str, limit: int = 100) -> list[Message]:
+    def list_messages(self, session_id: str, limit: int | None = 100) -> list[Message]:
+        return [message for _, message in self.list_messages_with_markers(session_id, limit=limit)]
+
+    def list_messages_with_markers(
+        self,
+        session_id: str,
+        limit: int | None = None,
+    ) -> list[tuple[int, Message]]:
         with self._lock:
-            rows = self._conn.execute(
-                """
-                SELECT * FROM (
-                    SELECT * FROM messages
+            if limit is None:
+                rows = self._conn.execute(
+                    """
+                    SELECT rowid, * FROM messages
                     WHERE session_id = ?
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                )
-                ORDER BY created_at ASC
-                """,
-                (session_id, limit),
-            ).fetchall()
-        return [self._row_to_message(row) for row in rows]
+                    ORDER BY rowid ASC
+                    """,
+                    (session_id,),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    """
+                    SELECT * FROM (
+                        SELECT rowid, * FROM messages
+                        WHERE session_id = ?
+                        ORDER BY rowid DESC
+                        LIMIT ?
+                    )
+                    ORDER BY rowid ASC
+                    """,
+                    (session_id, limit),
+                ).fetchall()
+        return [(int(row["rowid"]), self._row_to_message(row)) for row in rows]
 
     def delete_old_messages(self, session_id: str, keep_latest: int = 2) -> None:
         with self._lock, self._conn:
@@ -270,7 +300,7 @@ class AgentStore:
                 """
                 SELECT id FROM messages
                 WHERE session_id = ?
-                ORDER BY created_at DESC
+                ORDER BY rowid DESC
                 LIMIT -1 OFFSET ?
                 """,
                 (session_id, keep_latest),
@@ -355,6 +385,36 @@ class AgentStore:
                 raise KeyError(f"Unknown candidate: {candidate_id}")
 
         candidate = self._row_to_candidate(row)
+        memory_id = row["memory_id"] if "memory_id" in row.keys() else None
+        if candidate.status == CandidateStatus.APPROVED:
+            if memory_id:
+                with self._lock:
+                    memory_row = self._conn.execute(
+                        "SELECT * FROM memories WHERE id = ?",
+                        (memory_id,),
+                    ).fetchone()
+                if memory_row is not None:
+                    return self._row_to_memory(memory_row)
+            query = """
+                SELECT * FROM memories
+                WHERE kind = ? AND content = ?
+            """
+            params: list[object] = [candidate.kind, candidate.content]
+            if candidate.source_session_id is None:
+                query += " AND source_session_id IS NULL"
+            else:
+                query += " AND source_session_id = ?"
+                params.append(candidate.source_session_id)
+            query += " ORDER BY rowid DESC LIMIT 1"
+            with self._lock:
+                memory_row = self._conn.execute(query, params).fetchone()
+            if memory_row is not None:
+                return self._row_to_memory(memory_row)
+            raise RuntimeError(f"Candidate {candidate_id} is approved but has no linked memory.")
+
+        if candidate.status == CandidateStatus.REJECTED:
+            raise RuntimeError(f"Candidate {candidate_id} was already rejected and cannot be confirmed.")
+
         timestamp = now_iso()
         memory = MemoryRecord(
             id=_new_id("mem"),
@@ -392,10 +452,10 @@ class AgentStore:
             self._conn.execute(
                 """
                 UPDATE memory_candidates
-                SET status = ?, updated_at = ?
+                SET status = ?, memory_id = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (CandidateStatus.APPROVED, timestamp, candidate_id),
+                (CandidateStatus.APPROVED, memory.id, timestamp, candidate_id),
             )
             self._sync_memory_fts(memory.id, memory.content, memory.summary, [])
         return memory
@@ -621,7 +681,7 @@ class AgentStore:
                 """
                 SELECT * FROM tool_events
                 WHERE session_id = ?
-                ORDER BY created_at DESC
+                ORDER BY rowid DESC
                 LIMIT ?
                 """,
                 (session_id, limit),
@@ -669,7 +729,7 @@ class AgentStore:
         if session_id:
             sql += " WHERE session_id = ?"
             params.append(session_id)
-        sql += " ORDER BY created_at DESC LIMIT 100"
+        sql += " ORDER BY rowid DESC LIMIT 100"
         with self._lock:
             rows = self._conn.execute(sql, params).fetchall()
         facts = [self._row_to_tool_fact(row) for row in rows]

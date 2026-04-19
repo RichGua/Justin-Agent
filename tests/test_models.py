@@ -1,129 +1,138 @@
 from __future__ import annotations
 
-import http.client
-import json
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from justin.models import OpenAICompatibleChatProvider
-from justin.types import ChatRequest
+import httpx
+from openai import APIConnectionError, APITimeoutError
+
+from justin.models import CompletionOutcome, LocalFallbackChatProvider, OpenAICompatibleChatProvider
+from justin.types import ChatRequest, ChatResponse
 
 
-class _FakeHTTPResponse:
-    def __init__(self, payload: dict) -> None:
-        self._payload = payload
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def read(self) -> bytes:
-        return json.dumps(self._payload).encode("utf-8")
+def _request() -> httpx.Request:
+    return httpx.Request("POST", "https://example.com/v1/chat/completions")
 
 
-class ModelParsingTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.provider = OpenAICompatibleChatProvider(
-            model_name="test-model",
-            api_base="https://example.com/v1",
-            api_key="your_api_key_here",
+class ModelProviderTests(unittest.TestCase):
+    def test_local_fallback_profile_response_is_readable(self) -> None:
+        provider = LocalFallbackChatProvider()
+        payload = ChatRequest(
+            system_prompt="You are Justin.",
+            conversation=[],
+            memory_snippets=["likes concise output"],
+            latest_user_message="What do you know about me?",
         )
 
-    def test_extracts_standard_message_content(self) -> None:
-        payload = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": "hello world",
-                    },
-                    "finish_reason": "stop",
-                }
-            ]
-        }
-        text = self.provider._extract_response(payload).content
-        self.assertEqual(text, "hello world")
+        result = provider.generate(payload)
 
-    def test_raises_when_only_reasoning_and_truncated(self) -> None:
-        payload = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "reasoning_content": "partial reasoning text",
-                    },
-                    "finish_reason": "length",
-                }
+        self.assertIn("long-term", result.content.lower())
+        self.assertIn("likes concise output", result.content)
+
+    def test_consume_non_stream_extracts_content_and_tool_calls(self) -> None:
+        provider = OpenAICompatibleChatProvider(
+            model_name="test-model",
+            api_base="https://example.com/v1",
+            api_key="test-key",
+        )
+        completion = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(
+                        content=[SimpleNamespace(text="hello world")],
+                        reasoning_content=None,
+                        tool_calls=[
+                            SimpleNamespace(
+                                id="call_1",
+                                function=SimpleNamespace(name="search_web", arguments='{"q":"hello"}'),
+                            )
+                        ],
+                    ),
+                )
             ]
-        }
-        with self.assertRaises(RuntimeError) as ctx:
-            self.provider._extract_response(payload)
+        )
+
+        outcome = provider._consume_non_stream(completion)
+
+        self.assertEqual(outcome.finish_reason, "stop")
+        self.assertEqual(outcome.response.content, "hello world")
+        self.assertEqual(len(outcome.response.tool_calls), 1)
+        self.assertEqual(outcome.response.tool_calls[0].name, "search_web")
+
+    def test_generate_raises_when_truncated_reasoning_has_no_final_content(self) -> None:
+        provider = OpenAICompatibleChatProvider(
+            model_name="test-model",
+            api_base="https://example.com/v1",
+            api_key="test-key",
+            max_tokens=64,
+            retry_max_tokens=64,
+        )
+        payload = ChatRequest(
+            system_prompt="You are Justin.",
+            conversation=[{"role": "user", "content": "hello"}],
+            memory_snippets=[],
+            latest_user_message="hello",
+        )
+
+        with patch.object(
+            provider,
+            "_request_chat_completion",
+            return_value=CompletionOutcome(
+                response=ChatResponse(content="", reasoning_content="partial reasoning"),
+                finish_reason="length",
+            ),
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                provider.generate(payload)
+
         self.assertIn("JUSTIN_MODEL_MAX_TOKENS", str(ctx.exception))
 
-    def test_generate_retries_when_length_without_final_content(self) -> None:
+    def test_generate_retries_with_higher_token_limit_after_length_finish(self) -> None:
         provider = OpenAICompatibleChatProvider(
-            model_name="z-ai/glm4.7",
-            api_base="https://integrate.api.nvidia.com/v1",
-            api_key="your_api_key_here",
+            model_name="test-model",
+            api_base="https://example.com/v1",
+            api_key="test-key",
             max_tokens=64,
             retry_max_tokens=4096,
         )
-        request_payload = ChatRequest(
+        payload = ChatRequest(
             system_prompt="You are Justin.",
-            conversation=[{"role": "user", "content": "你好"}],
+            conversation=[{"role": "user", "content": "hello"}],
             memory_snippets=[],
-            latest_user_message="你好",
+            latest_user_message="hello",
         )
+        calls: list[tuple[int, bool, bool]] = []
 
-        calls: list[dict] = []
-        first_response = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "reasoning_content": "partial reasoning",
-                    },
-                    "finish_reason": "length",
-                }
-            ]
-        }
-        second_response = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": "你好，我在。",
-                    },
-                    "finish_reason": "stop",
-                }
-            ]
-        }
-
-        def _fake_urlopen(http_request, timeout=0):
-            calls.append(json.loads(http_request.data.decode("utf-8")))
+        def side_effect(*args, **kwargs):
+            calls.append((kwargs["max_tokens"], kwargs["stream"], kwargs["trust_env"]))
             if len(calls) == 1:
-                return _FakeHTTPResponse(first_response)
-            return _FakeHTTPResponse(second_response)
+                return CompletionOutcome(
+                    response=ChatResponse(content="", reasoning_content="partial reasoning"),
+                    finish_reason="length",
+                )
+            return CompletionOutcome(
+                response=ChatResponse(content="hello"),
+                finish_reason="stop",
+            )
 
-        with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
-            text = provider.generate(request_payload).content
+        with patch.object(provider, "_request_chat_completion", side_effect=side_effect):
+            result = provider.generate(payload, chunk_callback=lambda _chunk, _is_reasoning: None)
 
-        self.assertEqual(text, "你好，我在。")
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[0]["max_tokens"], 64)
-        self.assertGreater(calls[1]["max_tokens"], calls[0]["max_tokens"])
+        self.assertEqual(result.content, "hello")
+        self.assertEqual(calls[0], (64, True, True))
+        self.assertEqual(calls[1], (1024, False, True))
 
-    def test_generate_retries_with_lower_max_tokens_on_timeout(self) -> None:
+    def test_generate_retries_with_lower_token_limit_after_timeout(self) -> None:
         provider = OpenAICompatibleChatProvider(
-            model_name="z-ai/glm4.7",
-            api_base="https://integrate.api.nvidia.com/v1",
-            api_key="your_api_key_here",
+            model_name="test-model",
+            api_base="https://example.com/v1",
+            api_key="test-key",
             max_tokens=1024,
             timeout_seconds=60,
         )
-        request_payload = ChatRequest(
+        payload = ChatRequest(
             system_prompt="You are Justin.",
             conversation=[
                 {"role": "user", "content": "msg-1"},
@@ -133,71 +142,63 @@ class ModelParsingTests(unittest.TestCase):
             memory_snippets=[],
             latest_user_message="msg-3",
         )
-
         calls: list[tuple[int, int]] = []
-        ok_response = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": "ok",
-                    },
-                    "finish_reason": "stop",
-                }
-            ]
-        }
 
-        def _fake_urlopen(http_request, timeout=0):
-            request_json = json.loads(http_request.data.decode("utf-8"))
-            calls.append((int(request_json.get("max_tokens", 0)), int(timeout)))
+        def side_effect(*args, **kwargs):
+            calls.append((kwargs["max_tokens"], kwargs["timeout_seconds"]))
             if len(calls) == 1:
-                raise TimeoutError("The read operation timed out")
-            return _FakeHTTPResponse(ok_response)
+                raise APITimeoutError(request=_request())
+            return CompletionOutcome(
+                response=ChatResponse(content="ok"),
+                finish_reason="stop",
+            )
 
-        with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
-            text = provider.generate(request_payload).content
+        with (
+            patch.object(provider, "_request_chat_completion", side_effect=side_effect),
+            patch("justin.models.time.sleep"),
+        ):
+            result = provider.generate(payload)
 
-        self.assertEqual(text, "ok")
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(result.content, "ok")
         self.assertEqual(calls[0][0], 1024)
         self.assertEqual(calls[1][0], 512)
         self.assertGreater(calls[0][1], 60)
 
-    def test_generate_retries_once_on_remote_disconnect(self) -> None:
+    def test_generate_retries_tls_stream_errors_without_env_proxy(self) -> None:
         provider = OpenAICompatibleChatProvider(
-            model_name="z-ai/glm4.7",
-            api_base="https://integrate.api.nvidia.com/v1",
-            api_key="your_api_key_here",
+            model_name="test-model",
+            api_base="https://example.com/v1",
+            api_key="test-key",
             max_tokens=512,
         )
-        request_payload = ChatRequest(
+        payload = ChatRequest(
             system_prompt="You are Justin.",
             conversation=[{"role": "user", "content": "hello"}],
             memory_snippets=[],
             latest_user_message="hello",
         )
+        calls: list[tuple[bool, bool]] = []
 
-        calls: list[int] = []
-        ok_response = {
-            "choices": [
-                {
-                    "message": {"role": "assistant", "content": "hello"},
-                    "finish_reason": "stop",
-                }
-            ]
-        }
-
-        def _fake_urlopen(http_request, timeout=0):
-            calls.append(timeout)
+        def side_effect(*args, **kwargs):
+            calls.append((kwargs["stream"], kwargs["trust_env"]))
             if len(calls) == 1:
-                raise http.client.RemoteDisconnected("Remote end closed connection without response")
-            return _FakeHTTPResponse(ok_response)
+                raise APIConnectionError(
+                    message="stream disconnected before completion: tls handshake eof",
+                    request=_request(),
+                )
+            return CompletionOutcome(
+                response=ChatResponse(content="hello"),
+                finish_reason="stop",
+            )
 
-        with patch("justin.models.request.urlopen", side_effect=_fake_urlopen):
-            text = provider.generate(request_payload).content
+        with (
+            patch.object(provider, "_request_chat_completion", side_effect=side_effect),
+            patch("justin.models.time.sleep"),
+        ):
+            result = provider.generate(payload, chunk_callback=lambda _chunk, _is_reasoning: None)
 
-        self.assertEqual(text, "hello")
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(result.content, "hello")
+        self.assertEqual(calls, [(True, True), (False, False)])
 
 
 if __name__ == "__main__":

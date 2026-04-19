@@ -64,7 +64,7 @@ class HeuristicMemoryExtractor:
             found = pattern.search(text)
             if not found:
                 continue
-            body = found.group("body").strip(" 。.!?，,")
+            body = found.group("body").strip(" 。，,!！？?")
             lowered = body.lower()
             if lowered.startswith(("我喜欢", "我不喜欢", "我偏好", "i like ", "i don't like ", "i prefer ")):
                 continue
@@ -74,8 +74,8 @@ class HeuristicMemoryExtractor:
 
     def _extract_identity(self, text: str) -> list[CandidateDraft]:
         patterns = [
-            re.compile(r"我叫(?P<body>[^，。.!?]+)"),
-            re.compile(r"我是(?P<body>[^，。.!?]+)"),
+            re.compile(r"我叫(?P<body>[^，。！？!?]+)"),
+            re.compile(r"我是(?P<body>[^，。！？!?]+)"),
             re.compile(r"\bmy name is (?P<body>[^,.!?]+)", re.IGNORECASE),
             re.compile(r"\bi am (?P<body>[^,.!?]+)", re.IGNORECASE),
         ]
@@ -83,27 +83,21 @@ class HeuristicMemoryExtractor:
 
     def _extract_preferences(self, text: str) -> list[CandidateDraft]:
         patterns = [
-            re.compile(r"我喜欢(?P<body>[^，。.!?]+)"),
-            re.compile(r"我不喜欢(?P<body>[^，。.!?]+)"),
-            re.compile(r"我偏好(?P<body>[^，。.!?]+)"),
-            re.compile(r"\bi prefer (?P<body>[^,.!?]+)", re.IGNORECASE),
-            re.compile(r"\bi like (?P<body>[^,.!?]+)", re.IGNORECASE),
-            re.compile(r"\bi don't like (?P<body>[^,.!?]+)", re.IGNORECASE),
+            (re.compile(r"我喜欢(?P<body>[^，。！？!?]+)"), "喜欢 "),
+            (re.compile(r"我不喜欢(?P<body>[^，。！？!?]+)"), "不喜欢 "),
+            (re.compile(r"我偏好(?P<body>[^，。！？!?]+)"), "偏好 "),
+            (re.compile(r"\bi prefer (?P<body>[^,.!?]+)", re.IGNORECASE), "prefers "),
+            (re.compile(r"\bi like (?P<body>[^,.!?]+)", re.IGNORECASE), "likes "),
+            (re.compile(r"\bi don't like (?P<body>[^,.!?]+)", re.IGNORECASE), "does not like "),
         ]
         results: list[CandidateDraft] = []
-        for pattern in patterns:
+        for pattern, prefix in patterns:
             found = pattern.search(text)
             if not found:
                 continue
             body = found.group("body").strip()
             if not body:
                 continue
-            if "不喜欢" in pattern.pattern or "don't like" in pattern.pattern:
-                prefix = "不喜欢 "
-            elif "偏好" in pattern.pattern or "prefer" in pattern.pattern:
-                prefix = "偏好 "
-            else:
-                prefix = "喜欢 "
             results.append(
                 CandidateDraft(
                     kind=MemoryKind.PREFERENCE,
@@ -116,8 +110,8 @@ class HeuristicMemoryExtractor:
 
     def _extract_goals(self, text: str) -> list[CandidateDraft]:
         patterns = [
-            re.compile(r"我的目标是(?P<body>[^，。.!?]+)"),
-            re.compile(r"我想要(?P<body>[^，。.!?]+)"),
+            re.compile(r"我的目标是(?P<body>[^，。！？!?]+)"),
+            re.compile(r"我想要(?P<body>[^，。！？!?]+)"),
             re.compile(r"\bmy goal is (?P<body>[^,.!?]+)", re.IGNORECASE),
             re.compile(r"\bi want to (?P<body>[^,.!?]+)", re.IGNORECASE),
         ]
@@ -125,8 +119,8 @@ class HeuristicMemoryExtractor:
 
     def _extract_projects(self, text: str) -> list[CandidateDraft]:
         patterns = [
-            re.compile(r"我在做(?P<body>[^，。.!?]+)"),
-            re.compile(r"我正在开发(?P<body>[^，。.!?]+)"),
+            re.compile(r"我在做(?P<body>[^，。！？!?]+)"),
+            re.compile(r"我正在开发(?P<body>[^，。！？!?]+)"),
             re.compile(r"\bi am working on (?P<body>[^,.!?]+)", re.IGNORECASE),
             re.compile(r"\bmy project is (?P<body>[^,.!?]+)", re.IGNORECASE),
         ]
@@ -134,11 +128,11 @@ class HeuristicMemoryExtractor:
 
     def _extract_lessons(self, text: str) -> list[CandidateDraft]:
         patterns = [
-            re.compile(r"我学到了(?P<body>[^，。.!?]+)"),
-            re.compile(r"我发现(?P<body>[^，。.!?]+)"),
-            re.compile(r"经验是(?P<body>[^，。.!?]+)"),
-            re.compile(r"下次应该(?P<body>[^，。.!?]+)"),
-            re.compile(r"请记住这个教训[：:](?P<body>[^，。.!?]+)"),
+            re.compile(r"我学到了(?P<body>[^，。！？!?]+)"),
+            re.compile(r"我发现(?P<body>[^，。！？!?]+)"),
+            re.compile(r"经验是(?P<body>[^，。！？!?]+)"),
+            re.compile(r"下次应该(?P<body>[^，。！？!?]+)"),
+            re.compile(r"请记住这个教训[:：](?P<body>[^，。！？!?]+)"),
             re.compile(r"\bi learned that (?P<body>[^,.!?]+)", re.IGNORECASE),
             re.compile(r"\bthe lesson is (?P<body>[^,.!?]+)", re.IGNORECASE),
             re.compile(r"\bnext time (?P<body>[^,.!?]+)", re.IGNORECASE),
