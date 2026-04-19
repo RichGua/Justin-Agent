@@ -130,6 +130,7 @@ class SweepingText:
 class JustinCliRenderer:
     def __init__(self, interactive: bool) -> None:
         self.interactive = interactive
+        self.auto_mode = False
         self.metrics = CliMetrics()
         if RICH_AVAILABLE:
             self.console = Console(soft_wrap=True)
@@ -197,6 +198,7 @@ class JustinCliRenderer:
             ("/new", "Start a new chat session"),
             ("/setup", "Re-run setup wizard"),
             ("/wechat", "Start the agent in WeChat mode"),
+            ("/auto", "Toggle autonomous execution mode"),
             ("/candidates", "List pending memory candidates"),
             ("/compact", "Compress session context using the model"),
             ("/tokens <num>", "Set model_max_tokens limit"),
@@ -311,20 +313,113 @@ class JustinCliRenderer:
     def ask_compress_context(self) -> bool:
         if not self.interactive:
             return False
-        
+
         msg = "Context window reached 70%. Do you want to compress dialogue history? (Memory facts will be retained)"
-        
+
         if not PROMPT_TOOLKIT_AVAILABLE:
             if not RICH_AVAILABLE:
                 val = input(f"\n{msg} [y/N]: ").strip().lower()
                 return val == "y"
-                
+
             from rich.prompt import Confirm
             return Confirm.ask(f"\n[bold yellow]{msg}[/bold yellow]", default=False)
 
         from prompt_toolkit.shortcuts import confirm
         print()
         return confirm(msg)
+
+    def ask_tool_confirmation(self, tool_name: str, arguments: str) -> str:
+        if not self.interactive or self.auto_mode:
+            return "y"
+            
+        if not PROMPT_TOOLKIT_AVAILABLE:
+            if not RICH_AVAILABLE:
+                print(f"\nJustin wants to run: {tool_name}")
+                print(f"Arguments: {arguments}")
+                val = input("Allow? [y]es, [n]o, [a]llow for turn: ").strip().lower()
+                return val or "y"
+                
+            from rich.prompt import Prompt
+            from rich.panel import Panel
+            from rich.text import Text
+            panel = Panel(
+                Text(f"Tool: {tool_name}\nArguments: {arguments}", style="bold cyan"),
+                title="[bold yellow]Action Required[/bold yellow]",
+                border_style="yellow"
+            )
+            self.console.print(panel)
+            val = Prompt.ask(
+                "Allow execution?", 
+                choices=["y", "n", "a"],
+                default="y"
+            )
+            return val
+
+        from prompt_toolkit.application import Application
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.layout.containers import Window
+        from prompt_toolkit.layout.controls import FormattedTextControl
+        from prompt_toolkit.layout.layout import Layout
+
+        choices = [
+            ("y", "Yes (Allow this time)"),
+            ("a", "Allow for this turn (Trust for all calls in this turn)"),
+            ("n", "No (Reject execution)")
+        ]
+        
+        state = {"selected_index": 0}
+        bindings = KeyBindings()
+
+        @bindings.add("up")
+        def _up(event):
+            state["selected_index"] = max(0, state["selected_index"] - 1)
+
+        @bindings.add("down")
+        def _down(event):
+            state["selected_index"] = min(len(choices) - 1, state["selected_index"] + 1)
+
+        @bindings.add("enter")
+        def _enter(event):
+            event.app.exit(result=choices[state["selected_index"]][0])
+            
+        @bindings.add("c-c")
+        def _cancel(event):
+            event.app.exit(result="n")
+
+        def get_text():
+            result = [
+                ("class:title", f"Justin wants to run: {tool_name}\n"),
+                ("class:arguments", f"Arguments: {arguments}\n\n")
+            ]
+            for i, (val, label) in enumerate(choices):
+                if i == state["selected_index"]:
+                    result.append(("class:selected", f"❯ {label}\n"))
+                else:
+                    result.append(("", f"  {label}\n"))
+            return result
+
+        from prompt_toolkit.styles import Style
+        style = Style.from_dict({
+            "title": "bold #ffb000",
+            "arguments": "#00ffff",
+            "selected": "bold #00ff00",
+        })
+
+        control = FormattedTextControl(get_text)
+        window = Window(content=control, height=len(choices) + 3)
+        layout = Layout(window)
+
+        app = Application(layout=layout, key_bindings=bindings, style=style, full_screen=False)
+        
+        if self.console:
+            self.console.print()
+        else:
+            print()
+            
+        try:
+            return app.run()
+        except Exception:
+            return "n"
 
     def show_context_telemetry(self, telemetry: Any, config: AgentConfig) -> None:
         if not telemetry or not self.interactive:
@@ -650,18 +745,45 @@ def _send_with_feedback(
     renderer: JustinCliRenderer,
 ):
     started_at = time.perf_counter()
+    
+    allowed_this_turn = set()
+    def confirm_tool(tool_name: str, arguments: str) -> bool:
+        if tool_name in allowed_this_turn:
+            return True
+        
+        status_paused = False
+        if hasattr(renderer, "status") and renderer.status:
+            renderer.status.stop()
+            status_paused = True
+            
+        choice = renderer.ask_tool_confirmation(tool_name, arguments)
+        
+        if status_paused:
+            renderer.status.start()
+            
+        if choice == "a":
+            allowed_this_turn.add(tool_name)
+            return True
+        return choice == "y"
+        
+    old_callback = runtime.tool_registry.policy.confirm_callback
+    runtime.tool_registry.policy.confirm_callback = confirm_tool
+
     with renderer.thinking():
         try:
             result = runtime.send_message(
-                content=content, 
+                content=content,
                 session_id=session_id,
-                status_callback=renderer.update_status
+                status_callback=renderer.update_status,
+                auto_mode=renderer.auto_mode
             )
         except Exception as exc:  # keep CLI stable and show user-facing errors.
             elapsed = time.perf_counter() - started_at
             renderer.on_turn_failure()
             renderer.show_error(exc, elapsed)
             return None
+        finally:
+            runtime.tool_registry.policy.confirm_callback = old_callback
 
     elapsed = time.perf_counter() - started_at
     renderer.on_turn_success(elapsed)
@@ -999,6 +1121,7 @@ def _print_cli_help() -> None:
     print("  /new                   Start a new session")
     print("  /setup                 Re-run setup wizard")
     print("  /wechat                Start the agent in WeChat mode")
+    print("  /auto                  Toggle autonomous execution mode")
     print("  /candidates            List pending memory candidates")
     print("  /compact               Compress current session context using LLM")
     print("  /tokens <num>          Set model_max_tokens limit")
@@ -1052,6 +1175,12 @@ def _handle_slash_command(
         runtime.apply_config(updated)
         renderer.show_info("Runtime provider config reloaded.")
         return active_session_id, False
+    if command == "/auto":
+        renderer.auto_mode = not renderer.auto_mode
+        status = "ENABLED" if renderer.auto_mode else "DISABLED"
+        renderer.show_info(f"Autonomous execution mode is now {status}.")
+        return active_session_id, False
+
     if command == "/wechat":
         from .wechat import start_wechat_bot
         start_wechat_bot(runtime, runtime.config)
