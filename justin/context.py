@@ -134,10 +134,50 @@ class ConversationContextBuilder:
         messages = self.store.list_messages(session_id)
         if not messages:
             return "No messages to compact."
+
+        # Determine how many messages to keep. If there are fewer than 3, no need to compact.
+        keep_latest = 2
+        if len(messages) <= keep_latest:
+            return "Context is already compact enough."
+
         summary = self._summarize_messages(messages)
-        self.store.upsert_session_summary(session_id, summary, source_message_count=len(messages))
-        # Optional: could delete older messages to really compact the DB
+        self.store.upsert_session_summary(session_id, summary, source_message_count=keep_latest)
+        self.store.delete_old_messages(session_id, keep_latest=keep_latest)
+
         return summary
+
+    def evaluate_compressibility(self, session_id: str) -> bool:
+        messages = self.store.list_messages(session_id)
+        if len(messages) <= 2:
+            return False
+            
+        # Get the last two messages to see if the conversation is at a natural stopping point
+        recent_text = ""
+        for m in messages[-2:]:
+            content = " ".join(m.content.split())
+            if content:
+                recent_text += f"{m.role.upper()}: {content[:300]}\n"
+                
+        prompt = (
+            "Based on the following end of a conversation, determine if it is a good time to compress the earlier conversation history. "
+            "A good time is when a task has just been completed, a topic has naturally concluded, or the user is not in the middle of waiting for a complex multi-step operation. "
+            "Reply with ONLY 'YES' if it's a good time to compress, or 'NO' if it's a bad time.\n\n"
+            f"{recent_text}"
+        )
+        
+        request = ChatRequest(
+            system_prompt="You are a conversation flow analyzer.",
+            conversation=[{"role": "user", "content": prompt}],
+            tools=[],
+            memory_snippets=[],
+            latest_user_message="",
+        )
+        
+        try:
+            response = self.chat_provider.generate(request)
+            return "YES" in response.content.upper()
+        except Exception:
+            return True
 
     def _select_recent_messages(
         self,

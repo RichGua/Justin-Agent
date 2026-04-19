@@ -252,14 +252,37 @@ class AgentStore:
         with self._lock:
             rows = self._conn.execute(
                 """
-                SELECT * FROM messages
-                WHERE session_id = ?
+                SELECT * FROM (
+                    SELECT * FROM messages
+                    WHERE session_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                )
                 ORDER BY created_at ASC
-                LIMIT ?
                 """,
                 (session_id, limit),
             ).fetchall()
         return [self._row_to_message(row) for row in rows]
+
+    def delete_old_messages(self, session_id: str, keep_latest: int = 2) -> None:
+        with self._lock, self._conn:
+            rows = self._conn.execute(
+                """
+                SELECT id FROM messages
+                WHERE session_id = ?
+                ORDER BY created_at DESC
+                LIMIT -1 OFFSET ?
+                """,
+                (session_id, keep_latest),
+            ).fetchall()
+            
+            if rows:
+                ids = [row["id"] for row in rows]
+                placeholders = ",".join(["?"] * len(ids))
+                self._conn.execute(
+                    f"DELETE FROM messages WHERE id IN ({placeholders})",
+                    ids
+                )
 
     def create_candidate(
         self,

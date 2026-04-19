@@ -191,6 +191,7 @@ class ChatToolCall:
 class ChatResponse:
     content: str
     tool_calls: list[ChatToolCall] = field(default_factory=list)
+    reasoning_content: str | None = None
 
 
 def now_iso() -> str:

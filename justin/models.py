@@ -239,19 +239,26 @@ class OpenAICompatibleChatProvider(ChatProvider):
                             arguments=func.get("arguments", "")
                         ))
 
+            reasoning = message.get("reasoning_content")
+            reasoning_str = reasoning if isinstance(reasoning, str) and reasoning.strip() else None
+
             if content or chat_tool_calls:
-                return ChatResponse(content=content, tool_calls=chat_tool_calls)
+                return ChatResponse(
+                    content=content, 
+                    tool_calls=chat_tool_calls,
+                    reasoning_content=reasoning_str
+                )
 
             # Some OpenAI-compatible providers (for example reasoning models on NIM)
             # may return only reasoning_content when output hits token limits.
-            reasoning = message.get("reasoning_content")
-            if isinstance(reasoning, str) and reasoning.strip():
+            if reasoning_str:
                 if finish_reason == "length":
                     raise RuntimeError(
                         "Model returned reasoning text but no final assistant content "
                         "(finish_reason=length). Increase JUSTIN_MODEL_MAX_TOKENS and retry."
                     )
-                return ChatResponse(content=reasoning.strip())
+                # Model returned ONLY reasoning content without tool calls or content
+                return ChatResponse(content="", reasoning_content=reasoning_str)
 
         text = first_choice.get("text")
         if isinstance(text, str) and text.strip():

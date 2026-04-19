@@ -199,7 +199,8 @@ class JustinCliRenderer:
             ("/wechat", "Start the agent in WeChat mode"),
             ("/candidates", "List pending memory candidates"),
             ("/compact", "Compress session context using the model"),
-            ("/tokens <num>", "Set max_tokens limit"),
+            ("/tokens <num>", "Set model_max_tokens limit"),
+            ("/context_limit <num>", "Set context_max_input_tokens limit"),
             ("/model <name>", "Switch model (e.g. /model gpt-4o)"),
             ("/approve <id>", "Approve candidate"),
             ("/reject <id> [note]", "Reject candidate"),
@@ -306,6 +307,24 @@ class JustinCliRenderer:
         for s in skills:
             table.add_row(f"{s.name} v{s.version}", s.summary)
         self.console.print(Panel(table, title="[bold #ffb000]Activated Skills[/bold #ffb000]", border_style="#d28d00", width=panel_width))
+
+    def ask_compress_context(self) -> bool:
+        if not self.interactive:
+            return False
+        
+        msg = "Context window reached 70%. Do you want to compress dialogue history? (Memory facts will be retained)"
+        
+        if not PROMPT_TOOLKIT_AVAILABLE:
+            if not RICH_AVAILABLE:
+                val = input(f"\n{msg} [y/N]: ").strip().lower()
+                return val == "y"
+                
+            from rich.prompt import Confirm
+            return Confirm.ask(f"\n[bold yellow]{msg}[/bold yellow]", default=False)
+
+        from prompt_toolkit.shortcuts import confirm
+        print()
+        return confirm(msg)
 
     def show_context_telemetry(self, telemetry: Any, config: AgentConfig) -> None:
         if not telemetry or not self.interactive:
@@ -608,6 +627,20 @@ def _run_chat(runtime: JustinRuntime, session_id: str | None, message: str | Non
         renderer.show_assistant_message(result.assistant_message.content)
         renderer.show_candidates(result.candidates)
         renderer.show_context_telemetry(result.context_telemetry, runtime.config)
+        
+        # Automatic context compression prompt
+        if result.context_telemetry and runtime.config.context_max_input_tokens > 0:
+            percentage = result.context_telemetry.context_tokens_after / runtime.config.context_max_input_tokens
+            if percentage >= 0.7:
+                # Use LLM to check if the current conversational state is good for compression
+                with renderer.thinking():
+                    is_good_time = runtime.context_builder.evaluate_compressibility(active_session_id)
+                    
+                if is_good_time:
+                    if renderer.ask_compress_context():
+                        with renderer.thinking():
+                            summary = runtime.context_builder.compact(active_session_id)
+                        renderer.show_info(f"Context compacted:\n{summary}")
 
 
 def _send_with_feedback(
@@ -968,7 +1001,8 @@ def _print_cli_help() -> None:
     print("  /wechat                Start the agent in WeChat mode")
     print("  /candidates            List pending memory candidates")
     print("  /compact               Compress current session context using LLM")
-    print("  /tokens <num>          Set max_tokens limit")
+    print("  /tokens <num>          Set model_max_tokens limit")
+    print("  /context_limit <num>   Set context_max_input_tokens limit")
     print("  /model <name>          Switch model (e.g. /model gpt-4o)")
     print("  /approve <id>          Approve a candidate")
     print("  /reject <id> [note]    Reject a candidate")
@@ -1064,10 +1098,22 @@ def _handle_slash_command(
         if len(tokens) == 2 and tokens[1].isdigit():
             num = int(tokens[1])
             runtime.config.model_max_tokens = num
+            runtime.config.save_settings()
             runtime.apply_config(runtime.config)
-            renderer.show_info(f"Max tokens updated to {num}.")
+            renderer.show_info(f"model_max_tokens updated to {num}.")
         else:
             renderer.show_info("Usage: /tokens <num>")
+        return active_session_id, False
+
+    if command == "/context_limit":
+        if len(tokens) == 2 and tokens[1].isdigit():
+            num = int(tokens[1])
+            runtime.config.context_max_input_tokens = num
+            runtime.config.save_settings()
+            runtime.apply_config(runtime.config)
+            renderer.show_info(f"context_max_input_tokens updated to {num}.")
+        else:
+            renderer.show_info("Usage: /context_limit <num>")
         return active_session_id, False
     if command == "/approve":
         if len(tokens) < 2:
