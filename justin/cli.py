@@ -16,9 +16,10 @@ from .config import (
     PROVIDER_OLLAMA,
     PROVIDER_OPENAI,
     PROVIDER_OPENAI_COMPATIBLE,
-    WECHAT_ACCESS_ALLOWLIST,
-    WECHAT_ACCESS_DISABLED,
-    WECHAT_ACCESS_OPEN,
+    WECHAT_DEFAULT_BASE_URL,
+    WECHAT_POLICY_ALLOWLIST,
+    WECHAT_POLICY_DISABLED,
+    WECHAT_POLICY_OPEN,
 )
 from .runtime import JustinRuntime, build_runtime_bundle
 from .types import to_plain_dict
@@ -1048,11 +1049,17 @@ def run_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
 
 
 def run_gateway_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
-    from .wechat import describe_gateway_status, pair_wechat_gateway
+    from .wechat import (
+        describe_gateway_status,
+        load_saved_credentials,
+        pair_wechat_gateway,
+        save_gateway_credentials,
+    )
 
     config = config or AgentConfig.from_env()
     config.ensure_directories()
     status = describe_gateway_status(config)
+    saved_credentials = load_saved_credentials(config)
     enable_default = config.wechat_enabled if config.has_user_settings() else True
 
     try:
@@ -1066,41 +1073,66 @@ def run_gateway_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
             console.print(Panel("[bold #ffb000]Justin Gateway Setup[/bold #ffb000]", border_style="#d28d00", expand=False))
             config.wechat_enabled = Confirm.ask("Enable the WeChat gateway?", default=enable_default)
             if config.wechat_enabled:
-                config.wechat_app_id = _ask_text("iLink App ID", default=config.wechat_app_id or "ilink_app_1")
                 config.wechat_auto_reply_prefix = _ask_text(
                     "Auto-reply prefix",
                     default=config.wechat_auto_reply_prefix or f"[{config.agent_name}] ",
                 )
-                policy_choice = Prompt.ask(
-                    "Access policy",
+                dm_policy_choice = Prompt.ask(
+                    "DM policy",
                     choices=["1", "2", "3"],
-                    default=_wechat_access_policy_to_choice(config.wechat_access_policy),
+                    default=_wechat_dm_policy_to_choice(config.wechat_dm_policy),
                 )
-                config.wechat_access_policy = _choice_to_wechat_access_policy(policy_choice)
-                if config.wechat_access_policy == WECHAT_ACCESS_ALLOWLIST:
-                    admin_user = _ask_text(
-                        "Admin user ID (optional, Enter to skip)",
-                        default=config.wechat_admin_user,
-                        required=False,
-                    )
-                    config.wechat_admin_user = admin_user or None
+                config.wechat_dm_policy = _choice_to_wechat_dm_policy(dm_policy_choice)
+                if config.wechat_dm_policy == WECHAT_POLICY_ALLOWLIST:
                     config.wechat_allowed_users = _ask_text(
                         "Allowed user IDs (comma-separated, optional)",
                         default=config.wechat_allowed_users or "",
                         required=False,
                     )
-                if config.wechat_access_policy == WECHAT_ACCESS_ALLOWLIST and not (
-                    config.wechat_admin_user or config.parse_wechat_allowed_users()
-                ):
+                if config.wechat_dm_policy == WECHAT_POLICY_ALLOWLIST and not config.parse_wechat_allowed_users():
                     console.print("[yellow]No allowlist entries configured yet. Incoming messages will be ignored until you add one.[/yellow]")
+                group_policy_choice = Prompt.ask(
+                    "Group policy",
+                    choices=["1", "2", "3"],
+                    default=_wechat_group_policy_to_choice(config.wechat_group_policy),
+                )
+                config.wechat_group_policy = _choice_to_wechat_group_policy(group_policy_choice)
+                if config.wechat_group_policy == WECHAT_POLICY_ALLOWLIST:
+                    config.wechat_group_allowed_users = _ask_text(
+                        "Allowed group IDs (comma-separated, optional)",
+                        default=config.wechat_group_allowed_users or "",
+                        required=False,
+                    )
+                elif config.wechat_group_policy != WECHAT_POLICY_ALLOWLIST:
+                    config.wechat_group_allowed_users = config.wechat_group_allowed_users or ""
             config.save_settings()
             _apply_env(config)
 
-            pair_default = not status["has_saved_credentials"]
-            if config.wechat_enabled and Confirm.ask("Pair a WeChat account now?", default=pair_default):
-                paired = pair_wechat_gateway(config)
-                if paired:
-                    console.print(f"[green]Paired WeChat account:[/green] [bold]{paired['account_id']}[/bold]")
+            if config.wechat_enabled:
+                console.print("\n[bold #ffb000]WeChat Connection[/bold #ffb000]")
+                console.print("  [bold #ffb000]1)[/bold #ffb000] Scan a QR code in WeChat")
+                console.print("  [bold #ffb000]2)[/bold #ffb000] Enter account_id / token / base_url manually")
+                console.print("  [bold #ffb000]3)[/bold #ffb000] Skip for now")
+                connection_choice = Prompt.ask(
+                    "Choose setup method",
+                    choices=["1", "2", "3"],
+                    default="1" if not status["has_saved_credentials"] else "3",
+                )
+                if connection_choice == "1":
+                    paired = pair_wechat_gateway(config)
+                    if paired:
+                        config.wechat_account_id = paired.get("account_id", "")
+                        config.wechat_token = paired.get("token", "")
+                        config.wechat_base_url = paired.get("base_url", WECHAT_DEFAULT_BASE_URL)
+                        config.save_settings()
+                        _apply_env(config)
+                        console.print(f"[green]Paired WeChat account:[/green] [bold]{paired['account_id']}[/bold]")
+                elif connection_choice == "2":
+                    manual_credentials = _collect_manual_wechat_credentials(saved_credentials)
+                    paired = save_gateway_credentials(config, manual_credentials)
+                    config.save_settings()
+                    _apply_env(config)
+                    console.print(f"[green]Saved WeChat account:[/green] [bold]{paired['account_id']}[/bold]")
         else:
             print("\n=== Justin Gateway Setup ===")
             config.wechat_enabled = _ask_choice(
@@ -1109,43 +1141,72 @@ def run_gateway_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
                 default="y" if enable_default else "n",
             ) == "y"
             if config.wechat_enabled:
-                config.wechat_app_id = _ask_text("iLink App ID", default=config.wechat_app_id or "ilink_app_1")
                 config.wechat_auto_reply_prefix = _ask_text(
                     "Auto-reply prefix",
                     default=config.wechat_auto_reply_prefix or f"[{config.agent_name}] ",
                 )
-                print("Access policy:")
+                print("DM policy:")
                 print("  1) open")
                 print("  2) allowlist")
                 print("  3) disabled")
-                policy_choice = _ask_choice(
-                    "Pick access policy",
+                dm_policy_choice = _ask_choice(
+                    "Pick DM policy",
                     {"1", "2", "3"},
-                    default=_wechat_access_policy_to_choice(config.wechat_access_policy),
+                    default=_wechat_dm_policy_to_choice(config.wechat_dm_policy),
                 )
-                config.wechat_access_policy = _choice_to_wechat_access_policy(policy_choice)
-                if config.wechat_access_policy == WECHAT_ACCESS_ALLOWLIST:
-                    admin_user = _ask_text(
-                        "Admin user ID (optional, Enter to skip)",
-                        default=config.wechat_admin_user,
-                        required=False,
-                    )
-                    config.wechat_admin_user = admin_user or None
+                config.wechat_dm_policy = _choice_to_wechat_dm_policy(dm_policy_choice)
+                if config.wechat_dm_policy == WECHAT_POLICY_ALLOWLIST:
                     config.wechat_allowed_users = _ask_text(
                         "Allowed user IDs (comma-separated, optional)",
                         default=config.wechat_allowed_users or "",
                         required=False,
                     )
-                    if not (config.wechat_admin_user or config.parse_wechat_allowed_users()):
+                    if not config.parse_wechat_allowed_users():
                         print("No allowlist entries configured yet. Incoming messages will be ignored until you add one.")
+                print("Group policy:")
+                print("  1) disabled")
+                print("  2) allowlist")
+                print("  3) open")
+                group_policy_choice = _ask_choice(
+                    "Pick group policy",
+                    {"1", "2", "3"},
+                    default=_wechat_group_policy_to_choice(config.wechat_group_policy),
+                )
+                config.wechat_group_policy = _choice_to_wechat_group_policy(group_policy_choice)
+                if config.wechat_group_policy == WECHAT_POLICY_ALLOWLIST:
+                    config.wechat_group_allowed_users = _ask_text(
+                        "Allowed group IDs (comma-separated, optional)",
+                        default=config.wechat_group_allowed_users or "",
+                        required=False,
+                    )
             config.save_settings()
             _apply_env(config)
 
-            pair_default = "y" if not status["has_saved_credentials"] else "n"
-            if config.wechat_enabled and _ask_choice("Pair a WeChat account now?", {"y", "n"}, default=pair_default) == "y":
-                paired = pair_wechat_gateway(config)
-                if paired:
-                    print(f"Paired WeChat account: {paired['account_id']}")
+            if config.wechat_enabled:
+                print("\nWeChat connection:")
+                print("  1) Scan a QR code in WeChat")
+                print("  2) Enter account_id / token / base_url manually")
+                print("  3) Skip for now")
+                connection_choice = _ask_choice(
+                    "Choose setup method",
+                    {"1", "2", "3"},
+                    default="1" if not status["has_saved_credentials"] else "3",
+                )
+                if connection_choice == "1":
+                    paired = pair_wechat_gateway(config)
+                    if paired:
+                        config.wechat_account_id = paired.get("account_id", "")
+                        config.wechat_token = paired.get("token", "")
+                        config.wechat_base_url = paired.get("base_url", WECHAT_DEFAULT_BASE_URL)
+                        config.save_settings()
+                        _apply_env(config)
+                        print(f"Paired WeChat account: {paired['account_id']}")
+                elif connection_choice == "2":
+                    manual_credentials = _collect_manual_wechat_credentials(saved_credentials)
+                    paired = save_gateway_credentials(config, manual_credentials)
+                    config.save_settings()
+                    _apply_env(config)
+                    print(f"Saved WeChat account: {paired['account_id']}")
 
         return config
     except KeyboardInterrupt:
@@ -1156,6 +1217,28 @@ def run_gateway_setup_wizard(config: AgentConfig | None = None) -> AgentConfig:
         else:
             print("\nGateway setup cancelled by user.")
         return config
+
+
+def _collect_manual_wechat_credentials(saved_credentials: dict[str, Any] | None = None) -> dict[str, Any]:
+    saved_credentials = saved_credentials or {}
+    account_id = _ask_text(
+        "WeChat account ID",
+        default=str(saved_credentials.get("account_id") or ""),
+    )
+    token = _ask_text(
+        "WeChat bot token",
+        default=str(saved_credentials.get("token") or ""),
+        secret=True,
+    )
+    base_url = _ask_text(
+        "WeChat base URL",
+        default=str(saved_credentials.get("base_url") or WECHAT_DEFAULT_BASE_URL),
+    )
+    return {
+        "account_id": account_id,
+        "token": token,
+        "base_url": base_url,
+    }
 
 
 def _apply_env(config: AgentConfig) -> None:
@@ -1177,41 +1260,69 @@ def _apply_env(config: AgentConfig) -> None:
     else:
         os.environ.pop("JUSTIN_API_KEY", None)
     os.environ["JUSTIN_WECHAT_ENABLED"] = "true" if config.wechat_enabled else "false"
-    os.environ["JUSTIN_WECHAT_APP_ID"] = config.wechat_app_id
+    os.environ["JUSTIN_WECHAT_ACCOUNT_ID"] = config.wechat_account_id
+    os.environ["JUSTIN_WECHAT_TOKEN"] = config.wechat_token
+    os.environ["JUSTIN_WECHAT_BASE_URL"] = config.wechat_base_url
     os.environ["JUSTIN_WECHAT_AUTO_REPLY_PREFIX"] = config.wechat_auto_reply_prefix
-    os.environ["JUSTIN_WECHAT_ACCESS_POLICY"] = config.wechat_access_policy
+    os.environ["JUSTIN_WECHAT_DM_POLICY"] = config.wechat_dm_policy
     os.environ["JUSTIN_WECHAT_ALLOWED_USERS"] = config.wechat_allowed_users
+    os.environ["JUSTIN_WECHAT_GROUP_POLICY"] = config.wechat_group_policy
+    os.environ["JUSTIN_WECHAT_GROUP_ALLOWED_USERS"] = config.wechat_group_allowed_users
+    os.environ["WEIXIN_ACCOUNT_ID"] = config.wechat_account_id
+    os.environ["WEIXIN_TOKEN"] = config.wechat_token
+    os.environ["WEIXIN_BASE_URL"] = config.wechat_base_url
+    os.environ["WEIXIN_DM_POLICY"] = config.wechat_dm_policy
+    os.environ["WEIXIN_ALLOWED_USERS"] = config.wechat_allowed_users
+    os.environ["WEIXIN_GROUP_POLICY"] = config.wechat_group_policy
+    os.environ["WEIXIN_GROUP_ALLOWED_USERS"] = config.wechat_group_allowed_users
     os.environ["JUSTIN_AGENT_NAME"] = config.agent_name
     os.environ["JUSTIN_SYSTEM_PROMPT_PREFIX"] = config.system_prompt_prefix
-    if config.wechat_admin_user:
-        os.environ["JUSTIN_WECHAT_ADMIN_USER"] = config.wechat_admin_user
-    else:
-        os.environ.pop("JUSTIN_WECHAT_ADMIN_USER", None)
+    os.environ.pop("JUSTIN_WECHAT_APP_ID", None)
+    os.environ.pop("JUSTIN_WECHAT_ACCESS_POLICY", None)
+    os.environ.pop("JUSTIN_WECHAT_ADMIN_USER", None)
+ 
 
-
-def _wechat_access_policy_to_choice(policy: str) -> str:
+def _wechat_dm_policy_to_choice(policy: str) -> str:
     mapping = {
-        WECHAT_ACCESS_OPEN: "1",
-        WECHAT_ACCESS_ALLOWLIST: "2",
-        WECHAT_ACCESS_DISABLED: "3",
+        WECHAT_POLICY_OPEN: "1",
+        WECHAT_POLICY_ALLOWLIST: "2",
+        WECHAT_POLICY_DISABLED: "3",
     }
     return mapping.get(policy, "1")
 
 
-def _choice_to_wechat_access_policy(choice: str) -> str:
+def _choice_to_wechat_dm_policy(choice: str) -> str:
     mapping = {
-        "1": WECHAT_ACCESS_OPEN,
-        "2": WECHAT_ACCESS_ALLOWLIST,
-        "3": WECHAT_ACCESS_DISABLED,
+        "1": WECHAT_POLICY_OPEN,
+        "2": WECHAT_POLICY_ALLOWLIST,
+        "3": WECHAT_POLICY_DISABLED,
     }
-    return mapping.get(choice, WECHAT_ACCESS_OPEN)
+    return mapping.get(choice, WECHAT_POLICY_OPEN)
 
 
-def _wechat_access_policy_label(policy: str) -> str:
+def _wechat_group_policy_to_choice(policy: str) -> str:
+    mapping = {
+        WECHAT_POLICY_DISABLED: "1",
+        WECHAT_POLICY_ALLOWLIST: "2",
+        WECHAT_POLICY_OPEN: "3",
+    }
+    return mapping.get(policy, "1")
+
+
+def _choice_to_wechat_group_policy(choice: str) -> str:
+    mapping = {
+        "1": WECHAT_POLICY_DISABLED,
+        "2": WECHAT_POLICY_ALLOWLIST,
+        "3": WECHAT_POLICY_OPEN,
+    }
+    return mapping.get(choice, WECHAT_POLICY_DISABLED)
+
+
+def _wechat_policy_label(policy: str) -> str:
     labels = {
-        WECHAT_ACCESS_OPEN: "open",
-        WECHAT_ACCESS_ALLOWLIST: "allowlist",
-        WECHAT_ACCESS_DISABLED: "disabled",
+        WECHAT_POLICY_OPEN: "open",
+        WECHAT_POLICY_ALLOWLIST: "allowlist",
+        WECHAT_POLICY_DISABLED: "disabled",
     }
     return labels.get(policy, policy)
 
@@ -1221,6 +1332,7 @@ def _print_gateway_status(config: AgentConfig) -> None:
 
     status = describe_gateway_status(config)
     allowed_users = ", ".join(status["allowed_users"]) if status["allowed_users"] else "(none)"
+    allowed_groups = ", ".join(status["allowed_groups"]) if status["allowed_groups"] else "(none)"
     paired_account = status["paired_account_id"] or "(not paired)"
     if RICH_AVAILABLE:
         from rich.console import Console
@@ -1231,11 +1343,13 @@ def _print_gateway_status(config: AgentConfig) -> None:
         table.add_column("Field", style="bold #ffb000")
         table.add_column("Value", style="white")
         table.add_row("Enabled", "yes" if status["enabled"] else "no")
-        table.add_row("App ID", status["app_id"])
+        table.add_row("Account ID", status["account_id"] or paired_account)
+        table.add_row("Base URL", status["base_url"])
         table.add_row("Reply prefix", status["auto_reply_prefix"])
-        table.add_row("Access policy", _wechat_access_policy_label(status["access_policy"]))
-        table.add_row("Admin user", status["admin_user"] or "(none)")
+        table.add_row("DM policy", _wechat_policy_label(status["dm_policy"]))
+        table.add_row("Group policy", _wechat_policy_label(status["group_policy"]))
         table.add_row("Allowed users", allowed_users)
+        table.add_row("Allowed groups", allowed_groups)
         table.add_row("Paired account", paired_account)
         table.add_row("Saved accounts", str(status["saved_accounts_count"]))
         console.print(table)
@@ -1244,11 +1358,13 @@ def _print_gateway_status(config: AgentConfig) -> None:
     else:
         print("Gateway status:")
         print(f"  enabled: {'yes' if status['enabled'] else 'no'}")
-        print(f"  app_id: {status['app_id']}")
+        print(f"  account_id: {status['account_id'] or paired_account}")
+        print(f"  base_url: {status['base_url']}")
         print(f"  reply_prefix: {status['auto_reply_prefix']}")
-        print(f"  access_policy: {_wechat_access_policy_label(status['access_policy'])}")
-        print(f"  admin_user: {status['admin_user'] or '(none)'}")
+        print(f"  dm_policy: {_wechat_policy_label(status['dm_policy'])}")
+        print(f"  group_policy: {_wechat_policy_label(status['group_policy'])}")
         print(f"  allowed_users: {allowed_users}")
+        print(f"  allowed_groups: {allowed_groups}")
         print(f"  paired_account: {paired_account}")
         print(f"  saved_accounts: {status['saved_accounts_count']}")
         if status["active_account_path"]:
@@ -1421,7 +1537,8 @@ def _handle_slash_command(
         renderer.show_info(
             "gateway: "
             f"enabled={'yes' if status['enabled'] else 'no'}, "
-            f"policy={status['access_policy']}, "
+            f"dm_policy={status['dm_policy']}, "
+            f"group_policy={status['group_policy']}, "
             f"paired_account={status['paired_account_id'] or '(not paired)'}"
         )
         return active_session_id, False

@@ -13,9 +13,14 @@ PROVIDER_OPENAI = "openai"
 PROVIDER_OPENAI_COMPATIBLE = "openai-compatible"
 PROVIDER_OLLAMA = "ollama"
 PROVIDER_NVIDIA_NIM = "nvidia-nim"
-WECHAT_ACCESS_OPEN = "open"
-WECHAT_ACCESS_ALLOWLIST = "allowlist"
-WECHAT_ACCESS_DISABLED = "disabled"
+WECHAT_POLICY_OPEN = "open"
+WECHAT_POLICY_ALLOWLIST = "allowlist"
+WECHAT_POLICY_DISABLED = "disabled"
+WECHAT_POLICY_PAIRING = "pairing"
+WECHAT_DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
+WECHAT_ACCESS_OPEN = WECHAT_POLICY_OPEN
+WECHAT_ACCESS_ALLOWLIST = WECHAT_POLICY_ALLOWLIST
+WECHAT_ACCESS_DISABLED = WECHAT_POLICY_DISABLED
 SUPPORTED_PROVIDERS = {
     PROVIDER_LOCAL,
     PROVIDER_OPENAI,
@@ -24,9 +29,20 @@ SUPPORTED_PROVIDERS = {
     PROVIDER_NVIDIA_NIM,
 }
 SUPPORTED_WECHAT_ACCESS_POLICIES = {
-    WECHAT_ACCESS_OPEN,
-    WECHAT_ACCESS_ALLOWLIST,
-    WECHAT_ACCESS_DISABLED,
+    WECHAT_POLICY_OPEN,
+    WECHAT_POLICY_ALLOWLIST,
+    WECHAT_POLICY_DISABLED,
+}
+SUPPORTED_WECHAT_DM_POLICIES = {
+    WECHAT_POLICY_OPEN,
+    WECHAT_POLICY_ALLOWLIST,
+    WECHAT_POLICY_DISABLED,
+    WECHAT_POLICY_PAIRING,
+}
+SUPPORTED_WECHAT_GROUP_POLICIES = {
+    WECHAT_POLICY_OPEN,
+    WECHAT_POLICY_ALLOWLIST,
+    WECHAT_POLICY_DISABLED,
 }
 
 
@@ -65,11 +81,14 @@ class AgentConfig:
     
     # WeChat settings
     wechat_enabled: bool = False
-    wechat_app_id: str = "ilink_app_1"
+    wechat_account_id: str = ""
+    wechat_token: str = ""
+    wechat_base_url: str = WECHAT_DEFAULT_BASE_URL
     wechat_auto_reply_prefix: str = "[Justin] "
-    wechat_admin_user: str | None = None
-    wechat_access_policy: str = WECHAT_ACCESS_OPEN
+    wechat_dm_policy: str = WECHAT_POLICY_OPEN
     wechat_allowed_users: str = ""
+    wechat_group_policy: str = WECHAT_POLICY_DISABLED
+    wechat_group_allowed_users: str = ""
     
     # Agent Identity
     agent_name: str = "Justin"
@@ -80,8 +99,10 @@ class AgentConfig:
             self.settings_path = self.home_dir / DEFAULT_SETTINGS_FILENAME
         if self.skills_dir is None:
             self.skills_dir = self.home_dir / "skills"
-        if self.wechat_access_policy not in SUPPORTED_WECHAT_ACCESS_POLICIES:
-            self.wechat_access_policy = WECHAT_ACCESS_OPEN
+        if self.wechat_dm_policy not in SUPPORTED_WECHAT_DM_POLICIES:
+            self.wechat_dm_policy = WECHAT_POLICY_OPEN
+        if self.wechat_group_policy not in SUPPORTED_WECHAT_GROUP_POLICIES:
+            self.wechat_group_policy = WECHAT_POLICY_DISABLED
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -95,13 +116,31 @@ class AgentConfig:
         model_provider = _pick("JUSTIN_MODEL_PROVIDER", "model_provider", PROVIDER_LOCAL)
         if model_provider not in SUPPORTED_PROVIDERS:
             model_provider = PROVIDER_LOCAL
-        wechat_access_policy = _pick(
-            "JUSTIN_WECHAT_ACCESS_POLICY",
-            "wechat_access_policy",
-            WECHAT_ACCESS_OPEN,
+        def _pick_any(env_names: tuple[str, ...], persisted_keys: tuple[str, ...], default: Any = None) -> Any:
+            for env_name in env_names:
+                value = os.getenv(env_name)
+                if value not in (None, ""):
+                    return value
+            for persisted_key in persisted_keys:
+                if persisted_key in persisted and persisted.get(persisted_key) not in (None, ""):
+                    return persisted.get(persisted_key)
+            return default
+
+        dm_policy = _pick_any(
+            ("JUSTIN_WECHAT_DM_POLICY", "WEIXIN_DM_POLICY", "JUSTIN_WECHAT_ACCESS_POLICY"),
+            ("wechat_dm_policy", "wechat_access_policy"),
+            WECHAT_POLICY_OPEN,
         )
-        if wechat_access_policy not in SUPPORTED_WECHAT_ACCESS_POLICIES:
-            wechat_access_policy = WECHAT_ACCESS_OPEN
+        if dm_policy not in SUPPORTED_WECHAT_DM_POLICIES:
+            dm_policy = WECHAT_POLICY_OPEN
+
+        group_policy = _pick_any(
+            ("JUSTIN_WECHAT_GROUP_POLICY", "WEIXIN_GROUP_POLICY"),
+            ("wechat_group_policy",),
+            WECHAT_POLICY_DISABLED,
+        )
+        if group_policy not in SUPPORTED_WECHAT_GROUP_POLICIES:
+            group_policy = WECHAT_POLICY_DISABLED
 
         return cls(
             home_dir=home_dir,
@@ -146,11 +185,22 @@ class AgentConfig:
             shell_allowed_programs=_pick("JUSTIN_SHELL_ALLOWED_PROGRAMS", "shell_allowed_programs", "git,rg,where"),
             tool_max_output_chars=int(_pick("JUSTIN_TOOL_MAX_OUTPUT_CHARS", "tool_max_output_chars", "4000")),
             wechat_enabled=str(_pick("JUSTIN_WECHAT_ENABLED", "wechat_enabled", "false")).lower() in {"1", "true", "yes"},
-            wechat_app_id=_pick("JUSTIN_WECHAT_APP_ID", "wechat_app_id", "ilink_app_1"),
+            wechat_account_id=_pick_any(("JUSTIN_WECHAT_ACCOUNT_ID", "WEIXIN_ACCOUNT_ID"), ("wechat_account_id",), ""),
+            wechat_token=_pick_any(("JUSTIN_WECHAT_TOKEN", "WEIXIN_TOKEN"), ("wechat_token",), ""),
+            wechat_base_url=_pick_any(("JUSTIN_WECHAT_BASE_URL", "WEIXIN_BASE_URL"), ("wechat_base_url",), WECHAT_DEFAULT_BASE_URL),
             wechat_auto_reply_prefix=_pick("JUSTIN_WECHAT_AUTO_REPLY_PREFIX", "wechat_auto_reply_prefix", "[Justin] "),
-            wechat_admin_user=_pick("JUSTIN_WECHAT_ADMIN_USER", "wechat_admin_user"),
-            wechat_access_policy=wechat_access_policy,
-            wechat_allowed_users=_pick("JUSTIN_WECHAT_ALLOWED_USERS", "wechat_allowed_users", ""),
+            wechat_dm_policy=dm_policy,
+            wechat_allowed_users=_pick_any(
+                ("JUSTIN_WECHAT_ALLOWED_USERS", "WEIXIN_ALLOWED_USERS"),
+                ("wechat_allowed_users",),
+                "",
+            ),
+            wechat_group_policy=group_policy,
+            wechat_group_allowed_users=_pick_any(
+                ("JUSTIN_WECHAT_GROUP_ALLOWED_USERS", "WEIXIN_GROUP_ALLOWED_USERS"),
+                ("wechat_group_allowed_users",),
+                "",
+            ),
             agent_name=_pick("JUSTIN_AGENT_NAME", "agent_name", "Justin"),
             system_prompt_prefix=_pick("JUSTIN_SYSTEM_PROMPT_PREFIX", "system_prompt_prefix", "You are {agent_name}, a practical local-first agent."),
         )
@@ -193,11 +243,14 @@ class AgentConfig:
             "shell_allowed_programs": self.shell_allowed_programs,
             "tool_max_output_chars": self.tool_max_output_chars,
             "wechat_enabled": self.wechat_enabled,
-            "wechat_app_id": self.wechat_app_id,
+            "wechat_account_id": self.wechat_account_id,
+            "wechat_token": self.wechat_token,
+            "wechat_base_url": self.wechat_base_url,
             "wechat_auto_reply_prefix": self.wechat_auto_reply_prefix,
-            "wechat_admin_user": self.wechat_admin_user,
-            "wechat_access_policy": self.wechat_access_policy,
+            "wechat_dm_policy": self.wechat_dm_policy,
             "wechat_allowed_users": self.wechat_allowed_users,
+            "wechat_group_policy": self.wechat_group_policy,
+            "wechat_group_allowed_users": self.wechat_group_allowed_users,
             "agent_name": self.agent_name,
             "system_prompt_prefix": self.system_prompt_prefix,
         }
@@ -238,3 +291,14 @@ class AgentConfig:
                 seen.add(normalized)
                 users.append(normalized)
         return users
+
+    def parse_wechat_group_allowed_users(self) -> list[str]:
+        seen: set[str] = set()
+        groups: list[str] = []
+        raw_values = (self.wechat_group_allowed_users or "").replace("\n", ",").split(",")
+        for item in raw_values:
+            normalized = item.strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                groups.append(normalized)
+        return groups

@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 import uuid
 from pathlib import Path
 from shutil import rmtree
+from unittest.mock import patch
 
 from justin.config import (
     AgentConfig,
-    WECHAT_ACCESS_ALLOWLIST,
-    WECHAT_ACCESS_DISABLED,
-    WECHAT_ACCESS_OPEN,
+    WECHAT_POLICY_ALLOWLIST,
+    WECHAT_POLICY_DISABLED,
+    WECHAT_POLICY_OPEN,
 )
 from justin.wechat import (
+    _build_ilink_headers,
     describe_gateway_status,
     is_wechat_sender_allowed,
     load_saved_credentials,
+    qr_login,
     save_gateway_credentials,
 )
 
@@ -30,7 +34,7 @@ class WeChatGatewayTests(unittest.TestCase):
             database_path=self.temp_dir / "agent.db",
             settings_path=self.temp_dir / "settings.json",
             wechat_enabled=True,
-            wechat_access_policy=WECHAT_ACCESS_OPEN,
+            wechat_dm_policy=WECHAT_POLICY_OPEN,
         )
         self.config.ensure_directories()
 
@@ -71,18 +75,77 @@ class WeChatGatewayTests(unittest.TestCase):
         self.assertEqual(status["paired_account_id"], "wx_bot_2")
         self.assertEqual(status["saved_accounts_count"], 1)
 
+    def test_ilink_headers_use_hermes_bot_app_id(self) -> None:
+        headers = _build_ilink_headers(token="secret", include_json_headers=True, content_length=3)
+
+        self.assertEqual(headers["iLink-App-Id"], "bot")
+        self.assertEqual(headers["AuthorizationType"], "ilink_bot_token")
+        self.assertIn("X-WECHAT-UIN", headers)
+
     def test_sender_policy_open_allowlist_and_disabled(self) -> None:
         self.assertTrue(is_wechat_sender_allowed(self.config, "alice"))
 
-        self.config.wechat_access_policy = WECHAT_ACCESS_ALLOWLIST
-        self.config.wechat_admin_user = "wx_admin"
+        self.config.wechat_dm_policy = WECHAT_POLICY_ALLOWLIST
         self.config.wechat_allowed_users = "alice,bob"
         self.assertTrue(is_wechat_sender_allowed(self.config, "alice"))
-        self.assertTrue(is_wechat_sender_allowed(self.config, "wx_admin"))
         self.assertFalse(is_wechat_sender_allowed(self.config, "mallory"))
 
-        self.config.wechat_access_policy = WECHAT_ACCESS_DISABLED
+        self.config.wechat_dm_policy = WECHAT_POLICY_DISABLED
         self.assertFalse(is_wechat_sender_allowed(self.config, "alice"))
+
+    def test_group_policy_respects_allowlist(self) -> None:
+        self.config.wechat_group_policy = WECHAT_POLICY_ALLOWLIST
+        self.config.wechat_group_allowed_users = "room-1,room-2"
+
+        self.assertTrue(is_wechat_sender_allowed(self.config, "alice", chat_type="group", group_id="room-1"))
+        self.assertFalse(is_wechat_sender_allowed(self.config, "alice", chat_type="group", group_id="room-9"))
+
+    def test_qr_login_renders_url_payload_when_available(self) -> None:
+        scan_payloads: list[str] = []
+
+        class FakeQRCode:
+            def add_data(self, data: str) -> None:
+                scan_payloads.append(data)
+
+            def make(self, fit: bool = True) -> None:
+                return None
+
+            def print_ascii(self, invert: bool = True) -> None:
+                return None
+
+        class FakeSession:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        responses = [
+            {
+                "qrcode": "short-token",
+                "qrcode_img_content": "https://liteapp.weixin.qq.com/q/demo",
+            },
+            {
+                "status": "confirmed",
+                "ilink_bot_id": "wx_bot_3",
+                "bot_token": "token-3",
+                "baseurl": "https://wechat.example.com",
+            },
+        ]
+
+        async def fake_api_get(*args, **kwargs):
+            return responses.pop(0)
+
+        with (
+            patch("justin.wechat._api_get", side_effect=fake_api_get),
+            patch("justin.wechat.qrcode.QRCode", return_value=FakeQRCode()),
+            patch("justin.wechat.aiohttp.ClientSession", return_value=FakeSession()),
+            patch("justin.wechat.asyncio.sleep"),
+        ):
+            credentials = asyncio.run(qr_login())
+
+        self.assertIsNotNone(credentials)
+        self.assertIn("https://liteapp.weixin.qq.com/q/demo", scan_payloads)
 
 
 if __name__ == "__main__":
