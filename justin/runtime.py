@@ -159,7 +159,7 @@ def _build_context_builder(config: AgentConfig, store: AgentStore, chat_provider
         tool_fact_limit=config.context_tool_fact_limit,
         compression_tier=config.context_policy,
     )
-    return ConversationContextBuilder(store=store, policy=policy, chat_provider=chat_provider)
+    return ConversationContextBuilder(store=store, policy=policy, chat_provider=chat_provider, config=config)
 
 
 def _build_search_service(config: AgentConfig, store: AgentStore) -> SearchService | None:
