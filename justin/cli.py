@@ -200,7 +200,7 @@ class JustinCliRenderer:
             ("/wechat", "Start the agent in WeChat mode"),
             ("/auto", "Toggle autonomous execution mode"),
             ("/candidates", "List pending memory candidates"),
-            ("/compact", "Compress session context using the model"),
+            ("/compact", "Compress session context using LLM"),
             ("/tokens <num>", "Set model_max_tokens limit"),
             ("/context_limit <num>", "Set context_max_input_tokens limit"),
             ("/model <name>", "Switch model (e.g. /model gpt-4o)"),
@@ -1127,7 +1127,7 @@ def _print_cli_help() -> None:
     print("  /wechat                Start the agent in WeChat mode")
     print("  /auto                  Toggle autonomous execution mode")
     print("  /candidates            List pending memory candidates")
-    print("  /compact               Compress current session context using LLM")
+    print("  /compact               Compress session context using LLM")
     print("  /tokens <num>          Set model_max_tokens limit")
     print("  /context_limit <num>   Set context_max_input_tokens limit")
     print("  /model <name>          Switch model (e.g. /model gpt-4o)")

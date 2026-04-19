@@ -68,6 +68,11 @@ class OpenAICompatibleChatProvider(ChatProvider):
     timeout_seconds: int = 60
     retry_max_tokens: int = 8192
 
+    def _next_retry_max_tokens(self, current_tokens: int) -> int:
+        current = max(int(current_tokens), 1)
+        candidate = max(current * 4, 1024)
+        return min(candidate, max(int(self.retry_max_tokens), current))
+
     def generate(
         self, 
         payload: ChatRequest, 
@@ -83,96 +88,113 @@ class OpenAICompatibleChatProvider(ChatProvider):
         )
         
         messages = [{"role": "system", "content": payload.system_prompt}, *payload.conversation]
-        
-        try:
-            kwargs = {
-                "model": self.model_name,
-                "messages": messages,
-                "temperature": self.temperature,
-                "top_p": self.top_p,
-            }
-            if self.max_tokens > 0:
-                kwargs["max_tokens"] = self.max_tokens
-            if payload.tools:
-                kwargs["tools"] = payload.tools
+        current_max_tokens = self.max_tokens
 
-            # Decide whether to stream
-            stream = chunk_callback is not None
-            
-            completion = client.chat.completions.create(
-                stream=stream,
-                **kwargs
-            )
-            
-            if stream:
-                full_content = []
-                full_reasoning = []
-                tool_calls_dict = {}
+        while True:
+            try:
+                kwargs = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "temperature": self.temperature,
+                    "top_p": self.top_p,
+                }
+                if current_max_tokens > 0:
+                    kwargs["max_tokens"] = current_max_tokens
+                if payload.tools:
+                    kwargs["tools"] = payload.tools
+
+                # Decide whether to stream
+                stream = chunk_callback is not None
                 
-                for chunk in completion:
-                    if not getattr(chunk, "choices", None):
-                        continue
-                    delta = chunk.choices[0].delta
+                completion = client.chat.completions.create(
+                    stream=stream,
+                    **kwargs
+                )
+                
+                if stream:
+                    full_content = []
+                    full_reasoning = []
+                    tool_calls_dict = {}
                     
-                    reasoning = getattr(delta, "reasoning_content", None)
-                    if reasoning:
-                        full_reasoning.append(reasoning)
-                        chunk_callback(reasoning, True)
+                    finish_reason = None
+                    
+                    for chunk in completion:
+                        if not getattr(chunk, "choices", None):
+                            continue
+                        delta = chunk.choices[0].delta
+                        finish_reason = chunk.choices[0].finish_reason
                         
-                    content = delta.content
-                    if content:
-                        full_content.append(content)
-                        chunk_callback(content, False)
-                        
-                    if getattr(delta, "tool_calls", None):
-                        for tc in delta.tool_calls:
-                            idx = tc.index
-                            if idx not in tool_calls_dict:
-                                tool_calls_dict[idx] = {"id": tc.id or "", "name": tc.function.name or "", "arguments": tc.function.arguments or ""}
-                            else:
-                                if tc.id: tool_calls_dict[idx]["id"] += tc.id
-                                if tc.function.name: tool_calls_dict[idx]["name"] += tc.function.name
-                                if tc.function.arguments: tool_calls_dict[idx]["arguments"] += tc.function.arguments
-                                
-                chat_tool_calls = [
-                    ChatToolCall(id=v["id"], name=v["name"], arguments=v["arguments"]) 
-                    for k, v in sorted(tool_calls_dict.items())
-                ]
-                
-                content_str = "".join(full_content)
-                reasoning_str = "".join(full_reasoning)
-                
-                return ChatResponse(
-                    content=content_str,
-                    tool_calls=chat_tool_calls,
-                    reasoning_content=reasoning_str if reasoning_str else None
-                )
-            else:
-                # Non-streaming fallback
-                choice = completion.choices[0]
-                message = choice.message
-                
-                content = message.content or ""
-                reasoning = getattr(message, "reasoning_content", None)
-                
-                chat_tool_calls = []
-                if message.tool_calls:
-                    for tc in message.tool_calls:
-                        chat_tool_calls.append(ChatToolCall(
-                            id=tc.id,
-                            name=tc.function.name,
-                            arguments=tc.function.arguments
-                        ))
-                
-                return ChatResponse(
-                    content=content,
-                    tool_calls=chat_tool_calls,
-                    reasoning_content=reasoning if reasoning else None
-                )
+                        reasoning = getattr(delta, "reasoning_content", None)
+                        if reasoning:
+                            full_reasoning.append(reasoning)
+                            chunk_callback(reasoning, True)
+                            
+                        content = delta.content
+                        if content:
+                            full_content.append(content)
+                            chunk_callback(content, False)
+                            
+                        if getattr(delta, "tool_calls", None):
+                            for tc in delta.tool_calls:
+                                idx = tc.index
+                                if idx not in tool_calls_dict:
+                                    tool_calls_dict[idx] = {"id": tc.id or "", "name": tc.function.name or "", "arguments": tc.function.arguments or ""}
+                                else:
+                                    if tc.id: tool_calls_dict[idx]["id"] += tc.id
+                                    if tc.function.name: tool_calls_dict[idx]["name"] += tc.function.name
+                                    if tc.function.arguments: tool_calls_dict[idx]["arguments"] += tc.function.arguments
+                                    
+                    if finish_reason == "length" and self.retry_max_tokens > 0:
+                        next_tokens = self._next_retry_max_tokens(current_max_tokens)
+                        if next_tokens > max(current_max_tokens, 0):
+                            current_max_tokens = next_tokens
+                            continue
+                            
+                    chat_tool_calls = [
+                        ChatToolCall(id=v["id"], name=v["name"], arguments=v["arguments"]) 
+                        for k, v in sorted(tool_calls_dict.items())
+                    ]
+                    
+                    content_str = "".join(full_content)
+                    reasoning_str = "".join(full_reasoning)
+                    
+                    return ChatResponse(
+                        content=content_str,
+                        tool_calls=chat_tool_calls,
+                        reasoning_content=reasoning_str if reasoning_str else None
+                    )
+                else:
+                    # Non-streaming fallback
+                    choice = completion.choices[0]
+                    message = choice.message
+                    
+                    if choice.finish_reason == "length" and self.retry_max_tokens > 0:
+                        next_tokens = self._next_retry_max_tokens(current_max_tokens)
+                        if next_tokens > max(current_max_tokens, 0):
+                            current_max_tokens = next_tokens
+                            continue
+                    
+                    content = message.content or ""
+                    reasoning = getattr(message, "reasoning_content", None)
+                    
+                    chat_tool_calls = []
+                    if message.tool_calls:
+                        for tc in message.tool_calls:
+                            chat_tool_calls.append(ChatToolCall(
+                                id=tc.id,
+                                name=tc.function.name,
+                                arguments=tc.function.arguments
+                            ))
+                    
+                    return ChatResponse(
+                        content=content,
+                        tool_calls=chat_tool_calls,
+                        reasoning_content=reasoning if reasoning else None
+                    )
 
-        except openai.APIConnectionError as exc:
-            raise RuntimeError(f"Connection failed: {exc}") from exc
-        except openai.APITimeoutError as exc:
-            raise RuntimeError(f"Request timed out after {self.timeout_seconds}s") from exc
-        except Exception as exc:
-            raise RuntimeError(f"Model request failed: {exc}") from exc
+            except openai.APIConnectionError as exc:
+                raise RuntimeError(f"Connection failed: {exc}") from exc
+            except openai.APITimeoutError as exc:
+                raise RuntimeError(f"Request timed out after {self.timeout_seconds}s") from exc
+            except Exception as exc:
+                raise RuntimeError(f"Model request failed: {exc}") from exc
