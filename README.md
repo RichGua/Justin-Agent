@@ -253,3 +253,5 @@ justin gateway start
 ## 🗄️ Data Storage & Privacy
 - **Pure Local Storage**: All your chat histories, long-term memory databases, and configuration files are saved locally in SQLite databases and JSON files under the `~/.justin` (or your specified `JUSTIN_HOME`) directory.
 - **Zero Telemetry**: Justin contains no hidden telemetry or data reporting logic; your privacy is entirely yours.
+
+- My Email:shaojialz@foxmail.com
