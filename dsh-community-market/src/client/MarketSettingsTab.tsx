@@ -110,12 +110,15 @@ function harnessGroups(installations: readonly MarketInstallationView[]): readon
     groups[harnessFamilyForPackage(packageName)].push(installation)
   }
   return (['deepseek', 'codex', 'other'] as const)
-    .filter(family => groups[family].length > 0)
     .map(family => ({ family, installations: groups[family] }))
 }
 
 function harnessLocaleKey(family: HarnessFamily): 'harnessDeepseek' | 'harnessCodex' | 'harnessOther' {
   return family === 'deepseek' ? 'harnessDeepseek' : family === 'codex' ? 'harnessCodex' : 'harnessOther'
+}
+
+function harnessEmptyLocaleKey(family: HarnessFamily): 'harnessDeepseekEmpty' | 'harnessCodexEmpty' | 'harnessOtherEmpty' {
+  return family === 'deepseek' ? 'harnessDeepseekEmpty' : family === 'codex' ? 'harnessCodexEmpty' : 'harnessOtherEmpty'
 }
 
 function matchingInstallation(
@@ -1500,13 +1503,13 @@ function InstalledView(props: {
         >{props.t('refresh')}</Button>
       </div>
       {props.error !== undefined && <div className="dshMarketBanner" role="alert"><StateDot state="error" />{props.error}</div>}
-      {props.installations.length === 0 ? (
-        <div className="dshMarketEmpty"><h2>{props.t('noInstalled')}</h2><p>{props.t('noInstalledBody')}</p></div>
-      ) : (
-        <div className="dshMarketHarnessGroups">
-          {harnessGroups(props.installations).map(group => (
-            <section className="dshMarketHarnessGroup" key={group.family} aria-label={props.t(harnessLocaleKey(group.family))}>
-              <h3>{props.t(harnessLocaleKey(group.family))}</h3>
+      <div className="dshMarketHarnessGroups">
+        {harnessGroups(props.installations).map(group => (
+          <section className="dshMarketHarnessGroup" key={group.family} aria-label={props.t(harnessLocaleKey(group.family))}>
+            <h3>{props.t(harnessLocaleKey(group.family))}</h3>
+            {group.installations.length === 0 ? (
+              <p className="dshMarketHarnessEmpty">{props.t(harnessEmptyLocaleKey(group.family))}</p>
+            ) : (
               <div className="dshMarketReceipts">
                 {group.installations.map((installation, index) => (
                   <InstallationCard
@@ -1522,10 +1525,10 @@ function InstalledView(props: {
                   />
                 ))}
               </div>
-            </section>
-          ))}
-        </div>
-      )}
+            )}
+          </section>
+        ))}
+      </div>
     </div>
   )
 }

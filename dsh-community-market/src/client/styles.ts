@@ -414,6 +414,16 @@ const css = `
   text-transform: uppercase;
 }
 
+.dshMarketHarnessEmpty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .dshMarketReceipt {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
