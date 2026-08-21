@@ -1,0 +1,15 @@
+{
+  "name": "@justin/plugin-storage",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "justin": {
+    "apiVersion": 1,
+    "host": "./src/index.ts",
+    "permissions": ["filesystem:write"],
+    "dependencies": {},
+    "contributions": []
+  },
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
+  "dependencies": { "@justin/host": "workspace:*", "@justin/sdk": "workspace:*" }
+}
