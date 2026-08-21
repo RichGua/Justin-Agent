@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import "./vendor/dsh-base.css";
 import "./style.css";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
