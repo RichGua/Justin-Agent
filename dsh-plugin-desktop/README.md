@@ -6,6 +6,15 @@ English | [中文](README.zh.md)
 
 ## Architecture
 
+## Harness providers
+
+Desktop separates agent runtimes from ordinary DSH plugins. The base Profile
+ships **DeepSeek Harness**. **OpenAI Codex** and **Anthropic Claude** are
+optional provider bundles: enabling one is an explicit, restart-safe Profile
+change. Providers use the stable IDs `deepseek`, `codex`, and `claude` and are
+alternatives in the `primary-agent` group. A future provider needs only its
+own bundle and registry row, not a new Electron integration.
+
 The Electron executable is minimal bootstrap code. It acquires the single-instance lock, resolves the selected DSH profile, provides the native runtime capability, and boots the Host Cordis root in the Electron main process. The `desktop-shell` Host plugin owns the `BrowserWindow`, navigation policy, settings namespace, and close-versus-quit lifecycle through Cordis effects. The native runtime owns the physical tray, while `desktop-shell`, `desktop-profiles`, `desktop-terminal`, and `desktop-updates` contribute effect-scoped commands through its ordered item registry.
 
 Both presentation modes reuse the existing loopback Web carrier. The profile mounts the ordinary `dsh-base` and `dsh-web-app` bundles, the Host binds its HTTP and WebSocket surface to `127.0.0.1` on an ephemeral port, and Electron loads that same-origin page in a sandboxed renderer. There is no Electron-owned plugin roster, preload bridge, or raw Electron API in the renderer.

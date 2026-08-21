@@ -64,6 +64,8 @@ export const inject = ['webServer', 'webRuntime', 'appExit', 'settings']
 /** Standard settings namespace shared by tray and configuration surfaces. */
 export const DESKTOP_SETTINGS_NAMESPACE = settingsNamespace('dsh-desktop')
 
+export { HARNESS_PROVIDERS, harnessProviderForBundle, type HarnessKind, type HarnessProvider } from './harnesses.ts'
+
 const UI_THEME_SETTINGS_NAMESPACE = settingsNamespace(THEME_SETTINGS_NAMESPACE)
 const UI_LOCALE_SETTINGS_NAMESPACE = settingsNamespace(LOCALE_SETTINGS_NAMESPACE)
 
