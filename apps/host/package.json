@@ -1,0 +1,14 @@
+{
+  "name": "@justin/app-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx src/main.ts", "build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run --passWithNoTests" },
+  "dependencies": {
+    "@justin/host": "workspace:*",
+    "@justin/plugin-codex": "workspace:*",
+    "@justin/plugin-storage": "workspace:*",
+    "@justin/plugin-web-gateway": "workspace:*",
+    "tsx": "4.19.2"
+  }
+}

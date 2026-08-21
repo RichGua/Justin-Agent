@@ -7,6 +7,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --filter @justin/web dev",
+    "dev:host": "pnpm --filter @justin/app-host dev",
     "test": "pnpm -r exec vitest run --passWithNoTests",
     "typecheck": "pnpm -r typecheck"
   },

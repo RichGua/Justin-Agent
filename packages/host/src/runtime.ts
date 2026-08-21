@@ -14,7 +14,7 @@ export function createJustinContext(): JustinContext {
 export class PluginRuntime {
   readonly ctx = createJustinContext();
   #loaded = new Map<string, LoadedPlugin>();
-  async load(id: string, apply: PluginApply<JustinContext>, config: unknown): Promise<void> {
+  async load<Config>(id: string, apply: PluginApply<JustinContext, Config>, config: Config): Promise<void> {
     if (this.#loaded.has(id)) throw new Error(`Plugin already loaded: ${id}`.replace(/\\`/g, "`"));
     const dispose = (await apply(this.ctx, config)) ?? (() => undefined);
     this.#loaded.set(id, { id, dispose });

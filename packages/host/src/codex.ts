@@ -17,21 +17,27 @@ export class CodexAppServer extends EventEmitter {
     child.stderr.on("data", (chunk) => this.emit("stderr", String(chunk)));
     child.once("exit", (code, signal) => {
       this.#child = undefined;
-      const error = new Error(`Codex App Server exited (${code ?? signal ?? "unknown"})`.replace(/\\`/g, "`"));
+      const error = new Error("Codex App Server exited (" + (code ?? signal ?? "unknown") + ")");
       for (const { reject } of this.#pending.values()) reject(error);
       this.#pending.clear();
       this.emit("exit", { code, signal });
     });
   }
+  async initialize(clientInfo: { name: string; title: string; version: string }): Promise<void> {
+    await this.request("initialize", { clientInfo });
+    this.notify("initialized", {});
+  }
   request(method: string, params?: unknown): Promise<unknown> {
     if (!this.#child) throw new Error("Codex App Server is not running");
     const id = this.#nextId++;
-    this.#child.stdin.write(JSON.stringify({ id, method, params }) + "\\n");
-    return new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }));
+    return new Promise((resolve, reject) => {
+      this.#pending.set(id, { resolve, reject });
+      this.#child?.stdin.write(JSON.stringify({ id, method, params }) + "\n");
+    });
   }
   notify(method: string, params?: unknown): void {
     if (!this.#child) throw new Error("Codex App Server is not running");
-    this.#child.stdin.write(JSON.stringify({ method, params }) + "\\n");
+    this.#child.stdin.write(JSON.stringify({ method, params }) + "\n");
   }
   stop(): void { this.#child?.kill(); }
   private onLine(line: string): void {
@@ -45,3 +51,5 @@ export class CodexAppServer extends EventEmitter {
     } else if (message.method) this.emit("notification", message);
   }
 }
+
+
