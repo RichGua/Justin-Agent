@@ -293,8 +293,8 @@ export function apply(ctx: Context, config: Config): void {
     () => runtime.schedule({
       ...config,
       url: desktopRendererUrl(ctx.webServer.port, config.mode, runtime.platform),
-      productName: 'Justin Agent',
-      windowTitle: 'Justin Agent',
+      productName: 'RunDeep',
+      windowTitle: 'RunDeep',
       iconPath,
       trayIcons,
       readLocalePreference: () => {
