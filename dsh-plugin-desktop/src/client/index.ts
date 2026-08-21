@@ -5,6 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
 import { applyAdvancedShell } from './advanced-shell.ts'
+import { applyRunDeepBrand } from './brand.tsx'
 import { startRendererBootReporter } from './boot-health.ts'
 import { applyDesktopSettings } from './desktop-settings.ts'
 import { installDesktopDirectoryPickerBridge, requestDesktopDirectoryValidation } from './directory-picker.ts'
@@ -12,6 +13,7 @@ import { parseDesktopClientEnvironment } from './environment.ts'
 import { installWorkspaceFolderDrop } from './workspace-folder-drop.ts'
 
 export { applyAdvancedShell } from './advanced-shell.ts'
+export { applyRunDeepBrand } from './brand.tsx'
 export { applyDesktopSettings } from './desktop-settings.ts'
 export {
   createDesktopSettingsApi,
@@ -66,6 +68,7 @@ export const inject = [
 export function apply(ctx: ClientContext): void {
   const environment = parseDesktopClientEnvironment(window.location.search)
   if (!environment) return
+  applyRunDeepBrand(ctx)
   applyDesktopSettings(ctx, environment)
   ctx.effect(
     () => startRendererBootReporter(ctx.loader),

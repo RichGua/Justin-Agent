@@ -399,6 +399,21 @@ const css = `
   gap: 9px;
 }
 
+.dshMarketHarnessGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dshMarketHarnessGroup > h3 {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .dshMarketReceipt {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

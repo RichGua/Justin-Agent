@@ -1,8 +1,8 @@
 {
-  "name": "deepseek-harness-desktop",
+  "name": "rundeep",
   "version": "2.0.2",
   "private": true,
-  "description": "DSH Desktop product workspace",
+  "description": "RunDeep desktop AI harness workspace",
   "license": "MIT",
   "packageManager": "yarn@4.18.0",
   "engines": {

@@ -9,6 +9,7 @@ import { SIDEBAR_COLLAPSED } from './layout-state.ts'
 
 /** Advanced-shell stylesheet kept as a plain string so the package client bundle stays self-contained. */
 const ADVANCED_STYLES = `
+.rundeepBrandName { color: var(--dsw-alias-label-primary); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 18px; font-weight: 680; letter-spacing: -0.045em; }
 html, body, #root { width: 100%; height: 100%; }
 body[data-dsh-desktop-mode="advanced"] { margin: 0; background: transparent !important; }
 .dshDesktopFrame { position: relative; display: grid; grid-template-rows: 100%; width: 100%; height: 100%; overflow: hidden; background: transparent; transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out); }

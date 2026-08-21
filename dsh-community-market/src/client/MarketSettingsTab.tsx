@@ -83,6 +83,7 @@ interface CompletedOperation {
 }
 
 type ManualInstallHint = MarketCatalogResponse['manualInstall'][number]
+type HarnessFamily = 'deepseek' | 'codex' | 'other'
 
 type InstallationLoadOutcome =
   | { readonly installations: readonly MarketInstallationView[] }
@@ -90,6 +91,31 @@ type InstallationLoadOutcome =
 
 function visibleItemKey(value: VisibleItem): string {
   return `${value.source.sourceRecordId}\0${value.source.providerId}\0${value.item.id}\0${value.item.package?.name ?? ''}`
+}
+
+/** Classify by the runtime package family, never by an untrusted catalog label. */
+function harnessFamilyForPackage(packageName: string): HarnessFamily {
+  if (packageName === '@justin-agent/dsh-harness-codex' || /(?:^|[-/])codex(?:$|[-/])/iu.test(packageName)) return 'codex'
+  if (packageName.startsWith('@deepseek-ai/')) return 'deepseek'
+  return 'other'
+}
+
+function harnessGroups(installations: readonly MarketInstallationView[]): readonly {
+  readonly family: HarnessFamily
+  readonly installations: readonly MarketInstallationView[]
+}[] {
+  const groups: Record<HarnessFamily, MarketInstallationView[]> = { deepseek: [], codex: [], other: [] }
+  for (const installation of installations) {
+    const packageName = installation.kind === 'managed' ? installation.receipt.packageName : installation.packageName
+    groups[harnessFamilyForPackage(packageName)].push(installation)
+  }
+  return (['deepseek', 'codex', 'other'] as const)
+    .filter(family => groups[family].length > 0)
+    .map(family => ({ family, installations: groups[family] }))
+}
+
+function harnessLocaleKey(family: HarnessFamily): 'harnessDeepseek' | 'harnessCodex' | 'harnessOther' {
+  return family === 'deepseek' ? 'harnessDeepseek' : family === 'codex' ? 'harnessCodex' : 'harnessOther'
 }
 
 function matchingInstallation(
@@ -1477,19 +1503,26 @@ function InstalledView(props: {
       {props.installations.length === 0 ? (
         <div className="dshMarketEmpty"><h2>{props.t('noInstalled')}</h2><p>{props.t('noInstalledBody')}</p></div>
       ) : (
-        <div className="dshMarketReceipts">
-          {props.installations.map((installation, index) => (
-            <InstallationCard
-              key={installation.kind === 'managed'
-                ? installation.receipt.receiptId
-                : `${installation.kind}:${installation.packageName}:${index}`}
-              installation={installation}
-              operationPending={props.operationPending}
-              onUninstall={props.onUninstall}
-              onDisable={props.onDisable}
-              onEnable={props.onEnable}
-              t={props.t}
-            />
+        <div className="dshMarketHarnessGroups">
+          {harnessGroups(props.installations).map(group => (
+            <section className="dshMarketHarnessGroup" key={group.family} aria-label={props.t(harnessLocaleKey(group.family))}>
+              <h3>{props.t(harnessLocaleKey(group.family))}</h3>
+              <div className="dshMarketReceipts">
+                {group.installations.map((installation, index) => (
+                  <InstallationCard
+                    key={installation.kind === 'managed'
+                      ? installation.receipt.receiptId
+                      : `${installation.kind}:${installation.packageName}:${index}`}
+                    installation={installation}
+                    operationPending={props.operationPending}
+                    onUninstall={props.onUninstall}
+                    onDisable={props.onDisable}
+                    onEnable={props.onEnable}
+                    t={props.t}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -1521,6 +1554,7 @@ function InstallationCard(props: {
           <StateDot state={installation.status === 'disabled' ? 'warning' : 'done'} size={10} />
           <h3>{displayName}</h3>
           <Pill>{ownerLabel}</Pill>
+          <Pill>{props.t(harnessLocaleKey(harnessFamilyForPackage(packageName)))}</Pill>
           <Pill>{props.t(installation.status === 'disabled' ? 'disabledPlugin' : 'activePlugin')}</Pill>
         </div>
         <div className="dshMarketReceiptMeta">

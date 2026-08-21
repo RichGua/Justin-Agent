@@ -184,14 +184,14 @@ async function showProfileCheckpointRestoreNotice(
   const copy = locale === 'zh'
     ? {
         title: '已恢复最近一次可用配置',
-        message: `DSH Desktop 已恢复最近一次成功启动的配置「${profileName}」。`,
-        detail: '诊断信息已尽可能保存在本地；如果恢复涉及依赖声明，插件依赖也已按锁文件重新同步。DSH Desktop 现在将重新启动。',
+        message: `RunDeep 已恢复最近一次成功启动的配置「${profileName}」。`,
+        detail: '诊断信息已尽可能保存在本地；如果恢复涉及依赖声明，插件依赖也已按锁文件重新同步。RunDeep 现在将重新启动。',
         confirm: '重新启动',
       }
     : {
         title: 'Last healthy configuration restored',
-        message: `DSH Desktop restored Profile “${profileName}” from the last successful startup.`,
-        detail: 'Diagnostics were saved locally when possible. When dependency declarations were restored, plugin dependencies were synchronized from the lockfile. DSH Desktop will now restart.',
+        message: `RunDeep restored Profile “${profileName}” from the last successful startup.`,
+        detail: 'Diagnostics were saved locally when possible. When dependency declarations were restored, plugin dependencies were synchronized from the lockfile. RunDeep will now restart.',
         confirm: 'Restart',
       }
   try {
@@ -430,7 +430,7 @@ async function start(): Promise<void> {
     await app.whenReady()
     startupStage = 'shell-environment'
     lifecycleRecorder.transitionStartupStage(startupStage)
-    if (process.platform === 'win32') app.setAppUserModelId('ai.deepseek.dsh.desktop')
+    if (process.platform === 'win32') app.setAppUserModelId('com.rundeep.desktop')
     if (app.isPackaged && process.cwd() === '/') process.chdir(app.getPath('home'))
     const shellEnvironmentResolution = await resolveDesktopShellEnvironment({
       environment: process.env,

@@ -20,6 +20,9 @@
       name: dsh-plugin-desktop/updates
 
 # A desktop launch has no terminal operator waiting for the Web readiness line.
+- id: ui-brand-official
+  disabled: true
+
 - id: web-runtime
   config:
     openBrowser: false
