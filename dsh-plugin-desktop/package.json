@@ -344,8 +344,8 @@
           ]
         }
       ],
-      "artifactName": "DSH-Desktop-${version}-${arch}-Portable.${ext}",
-      "icon": "build/app-icon.png"
+      "artifactName": "RunDeep-${version}-${arch}-Portable.${ext}",
+      "icon": "build/app-icon.ico"
     },
     "nsis": {
       "license": "THIRD_PARTY_NOTICES.md",
@@ -358,7 +358,7 @@
       "differentialPackage": false,
       "shortcutName": "RunDeep",
       "useZip": true,
-      "artifactName": "DSH-Desktop-${version}-${arch}-Setup.${ext}"
+      "artifactName": "RunDeep-${version}-${arch}-Setup.${ext}"
     },
     "linux": {
       "target": [
