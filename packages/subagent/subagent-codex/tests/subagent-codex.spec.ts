@@ -65,7 +65,7 @@ vi.mock('node:fs', async (importOriginal) => {
 
 type JsonObject = Record<string, unknown>
 
-const CODEX_VERSION = '0.147.0'
+const CODEX_VERSION = '0.149.0'
 const CODEX_PLATFORM_PACKAGES = [
   '@openai/codex-darwin-arm64',
   '@openai/codex-darwin-x64',
