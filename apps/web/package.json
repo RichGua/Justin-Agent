@@ -1,0 +1,14 @@
+{
+  "name": "@justin/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": { "@justin/protocol": "workspace:*", "@vitejs/plugin-react": "4.4.1", "react": "19.1.1", "react-dom": "19.1.1", "vite": "6.1.0" },
+  "devDependencies": { "@types/react": "19.1.12", "@types/react-dom": "19.1.9" }
+}
