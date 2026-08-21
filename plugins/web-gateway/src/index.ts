@@ -21,7 +21,7 @@ export async function apply(ctx: JustinContext, config: { port?: number; staticD
     if ((request.params as { token: string }).token !== token) return reply.code(404).send();
     const session = nanoid(32); sessions.add(session);
     reply.setCookie("justin_session", session, { httpOnly: true, sameSite: "strict", secure: false, path: "/" });
-    return { ok: true };
+    return reply.redirect("/", 302);
   });
   const clients = new Set<{ send(payload: string): void; close(code?: number, reason?: string): void }>();
   const codex = ctx.justin.services.get("codex") as CodexAppServer | undefined;
