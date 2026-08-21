@@ -23,6 +23,9 @@
 - id: ui-brand-official
   disabled: true
 
+- id: ui-settings-plugin-inventory
+  disabled: true
+
 - id: web-runtime
   config:
     openBrowser: false
