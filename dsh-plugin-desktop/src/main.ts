@@ -103,7 +103,7 @@ import type { RendererBootReport } from './renderer-boot-contract.ts'
 import { desktopLocaleFromLanguageTag } from './tray-locale.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
-const PRODUCT_NAME = 'DSH Desktop'
+const PRODUCT_NAME = 'Justin Agent'
 
 class RendererStartupFailure extends Error {
   constructor(

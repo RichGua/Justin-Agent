@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-desktop",
   "version": "2.0.2",
-  "description": "DSH Desktop: an Electron shell composed as a DeepSeek Harness Cordis plugin",
+  "description": "Justin Agent: an Electron shell composed as a DeepSeek Harness Cordis plugin",
   "license": "MIT",
   "publishConfig": {
     "registry": "https://registry.npmjs.org"
@@ -282,8 +282,8 @@
     "vitest": "4.1.8"
   },
   "build": {
-    "appId": "ai.deepseek.dsh.desktop",
-    "productName": "DSH Desktop",
+    "appId": "com.justinagent.desktop",
+    "productName": "Justin Agent",
     "asar": true,
     "asarUnpack": [
       "package.json",
@@ -356,7 +356,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "differentialPackage": false,
-      "shortcutName": "DSH Desktop",
+      "shortcutName": "Justin Agent",
       "useZip": true,
       "artifactName": "DSH-Desktop-${version}-${arch}-Setup.${ext}"
     },
