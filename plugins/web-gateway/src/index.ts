@@ -59,7 +59,6 @@ export async function apply(ctx: JustinContext, config: { port?: number; staticD
       }
     });
   });
-  if (config.staticDir) app.get("/", async (_request, reply) => reply.sendFile("index.html"));
   await app.listen({ host: "127.0.0.1", port: config.port ?? 0 });
   const address = app.server.address();
   if (!address || typeof address === "string") throw new Error("Expected TCP listener");
