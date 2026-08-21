@@ -1,9 +1,0 @@
-{
-  "name": "@justin/bundle-base",
-  "version": "0.1.0",
-  "type": "module",
-  "justin": { "apiVersion": 1, "bundle": "./src/index.ts", "permissions": [], "dependencies": {}, "contributions": [] },
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
-  "dependencies": { "@justin/plugin-storage": "workspace:*", "@justin/plugin-codex": "workspace:*", "@justin/host": "workspace:*" }
-}
