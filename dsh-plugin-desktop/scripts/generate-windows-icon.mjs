@@ -1,9 +1,11 @@
+import { fileURLToPath } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import sharp from 'sharp'
 
-const source = resolve(process.cwd(), 'build/app-icon.png')
-const destination = resolve(process.cwd(), 'build/app-icon.ico')
+const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const source = resolve(packageDirectory, 'build/app-icon.png')
+const destination = resolve(packageDirectory, 'build/app-icon.ico')
 
 // Modern Windows supports PNG payloads inside ICO containers.  Keeping this
 // generator beside the source asset makes the desktop shortcut and packaged
