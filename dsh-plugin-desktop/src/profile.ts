@@ -32,8 +32,10 @@ import { DESKTOP_DEFAULT_WEB_PORT } from './desktop-port.ts'
 import type { DesktopShellMode } from './runtime.ts'
 import {
   CODEX_HARNESS_PLUGIN,
+  CUSTOM_HARNESS_ID_PATTERN,
   DEEPSEEK_HARNESS_PLUGIN,
-  type HarnessKind,
+  type CustomHarnessId,
+  type PrimaryHarnessId,
 } from './harnesses.ts'
 import {
   activeDesktopProfileLayers,
@@ -46,7 +48,11 @@ import {
   type DesktopMarketProvider,
   type DesktopMarketSnapshot,
 } from './desktop-market.ts'
-import { readDesktopPluginEntryOverrides } from './desktop-plugin-entries.ts'
+import {
+  desktopHarnessEntryOverrides,
+  readDesktopPluginEntryState,
+  resolvePrimaryHarness,
+} from './desktop-plugin-entries.ts'
 
 /** Persistent profile managed by the desktop launcher and the ordinary dsh plugin command. */
 export const DESKTOP_PROFILE_NAME = 'desktop'
@@ -76,7 +82,7 @@ const UPSTREAM_AGENT_PRESETS_PACKAGE = '@deepseek-ai/dsh-agent-presets'
 const DESKTOP_WINDOWS_AGENT_PRESETS_ROW_ID = 'desktop-windows-agent-presets'
 const DESKTOP_WINDOWS_AGENT_PRESETS_PACKAGE = 'dsh-plugin-desktop/windows-agent-presets'
 const DEFAULT_DESKTOP_SHELL_MODE: DesktopShellMode = 'compatibility'
-const DEFAULT_HARNESS: HarnessKind = 'deepseek'
+const DEFAULT_HARNESS: PrimaryHarnessId = 'deepseek'
 const DEFAULT_DESKTOP_PORT = DESKTOP_DEFAULT_WEB_PORT
 const DESKTOP_WEB_SERVER_ROW_ID = 'desktop-webserver'
 const DESKTOP_WEB_SERVER_PACKAGE = 'dsh-plugin-desktop/webserver'
@@ -118,17 +124,22 @@ export function parseDesktopPort(value: unknown): number {
 }
 
 /** Parse the primary AgentFactory selected for the next generation. */
-export function parseDesktopHarness(value: unknown): HarnessKind {
+export function parseDesktopHarness(value: unknown): PrimaryHarnessId {
   if (value === undefined) return DEFAULT_HARNESS
   if (value === 'deepseek' || value === 'codex') return value
-  throw new Error(`${BIN_NAME}: ${DESKTOP_SETTINGS_NAMESPACE}.harness must be "deepseek" or "codex"`)
+  if (typeof value === 'string' && CUSTOM_HARNESS_ID_PATTERN.test(value)) {
+    return value as CustomHarnessId
+  }
+  throw new Error(
+    `${BIN_NAME}: ${DESKTOP_SETTINGS_NAMESPACE}.harness must be "deepseek", "codex", or a custom harness id`,
+  )
 }
 
 /** Startup settings projected into the Loader graph before the settings plugin boots. */
 export interface DesktopStartupSettings {
   mode: DesktopShellMode
   port: number
-  harness: HarnessKind
+  harness: PrimaryHarnessId
 }
 
 /**
@@ -222,7 +233,7 @@ export interface PreparedDesktopProfile {
   /** Persisted loopback Web port applied to every startup consumer. */
   port: number
   /** Persisted primary AgentFactory selected for this generation. */
-  harness: HarnessKind
+  harness: PrimaryHarnessId
   /** Resolved file-backed settings document used by this generation. */
   settingsDocument: string
   /** Requested provider and the fail-closed provider effective for this generation. */
@@ -721,7 +732,8 @@ export function prepareDesktopProfile(
   } as SettingsFileConfig)
   const settingsDocument = resolveSettingsFileSpec(settingsConfig).filename
   hooks.onSettingsDocumentResolved?.(settingsDocument)
-  const { mode, port, harness } = readDesktopStartupSettings(settingsConfig)
+  const { mode, port, harness: requestedHarness } = readDesktopStartupSettings(settingsConfig)
+  const harness = resolvePrimaryHarness(requestedHarness, readDesktopPluginEntryState(profile.dir))
   patches.push({
     id: 'settings',
     config: settingsConfig,
@@ -734,10 +746,6 @@ export function prepareDesktopProfile(
   if (codexHarness?.name !== CODEX_HARNESS_PLUGIN) {
     throw new Error(`${BIN_NAME}: desktop profile must keep the canonical ${CODEX_HARNESS_PLUGIN} row`)
   }
-  patches.push(
-    { id: 'agent-loop', disabled: harness !== 'deepseek' },
-    { id: 'codex-harness', disabled: harness !== 'codex' },
-  )
   if (mode === 'advanced') {
     for (const [id, packageName] of [
       ['ui-layout', UI_LAYOUT_PACKAGE],
@@ -900,7 +908,11 @@ export function prepareDesktopProfile(
     }
   }
   collectIds(finalRows)
-  for (const [entryId, enabled] of readDesktopPluginEntryOverrides(profile.dir)) {
+  // The launcher-managed plugin panel is an ordinary final Cordis patch layer.
+  // Harness linking is the documented `{ id, disabled }` patch form: the
+  // primary harness engine and its plugin set load, every other harness set
+  // stays disabled, and the common group keeps manual state.
+  for (const [entryId, enabled] of desktopHarnessEntryOverrides(profile.dir, harness)) {
     if (availableIds.has(entryId)) patches.push({ id: entryId, disabled: !enabled })
   }
   return {

@@ -28,10 +28,10 @@ import {
 } from './directory-picker-route.ts'
 import {
   DESKTOP_DIAGNOSTICS_EXPORT_PATH,
+  DESKTOP_HARNESS_ASSIGN_PATH,
+  DESKTOP_HARNESS_CREATE_PATH,
+  DESKTOP_HARNESS_DELETE_PATH,
   DESKTOP_MARKET_SELECT_PATH,
-  DESKTOP_PLUGIN_CATEGORY_ASSIGN_PATH,
-  DESKTOP_PLUGIN_CATEGORY_CREATE_PATH,
-  DESKTOP_PLUGIN_CATEGORY_DELETE_PATH,
   DESKTOP_PLUGIN_ENTRY_TOGGLE_PATH,
   DESKTOP_PLUGINS_PATH,
   DESKTOP_PLUGIN_RESTART_PATH,
@@ -46,10 +46,10 @@ import {
 } from './desktop-settings-contract.ts'
 import {
   handleDesktopDiagnosticsExportRequest,
+  handleDesktopHarnessAssignRequest,
+  handleDesktopHarnessCreateRequest,
+  handleDesktopHarnessDeleteRequest,
   handleDesktopMarketSelectRequest,
-  handleDesktopPluginCategoryAssignRequest,
-  handleDesktopPluginCategoryCreateRequest,
-  handleDesktopPluginCategoryDeleteRequest,
   handleDesktopPluginEntryToggleRequest,
   handleDesktopPluginsRequest,
   handleDesktopPluginRestartRequest,
@@ -67,7 +67,6 @@ import { desktopBootRecoveryInjections } from './desktop-boot-recovery.ts'
 import type { DesktopShellMode } from './runtime.ts'
 import type {} from './runtime.ts'
 import { DESKTOP_DEFAULT_WEB_PORT } from './desktop-port.ts'
-import type { HarnessKind } from './harnesses.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'desktop-shell'
@@ -81,12 +80,18 @@ export const DESKTOP_SETTINGS_NAMESPACE = settingsNamespace('dsh-desktop')
 
 export {
   CODEX_HARNESS_PLUGIN,
+  COMMON_HARNESS_ID,
+  CUSTOM_HARNESS_ID_PATTERN,
   DEEPSEEK_HARNESS_FOUNDATION,
   DEEPSEEK_HARNESS_PLUGIN,
   HARNESS_PROVIDERS,
+  harnessProviderForEngine,
   harnessProviderForPlugin,
+  type CustomHarnessId,
+  type HarnessId,
   type HarnessKind,
   type HarnessProvider,
+  type PrimaryHarnessId,
 } from './harnesses.ts'
 
 const UI_THEME_SETTINGS_NAMESPACE = settingsNamespace(THEME_SETTINGS_NAMESPACE)
@@ -98,8 +103,8 @@ export interface DesktopSettings {
   mode: DesktopShellMode
   /** Loopback Web port selected for the next application generation; zero requests a random port. */
   port: number
-  /** Primary AgentFactory selected for the next application generation. */
-  harness: Extract<HarnessKind, 'deepseek' | 'codex'>
+  /** Primary AgentFactory id; a built-in or user-created harness. */
+  harness: string
   /** Log verbosity threshold applied to the file logger. */
   logLevel: 'debug' | 'info' | 'warn' | 'error'
 }
@@ -108,7 +113,7 @@ export interface DesktopSettings {
 export const DesktopSettingsSchema: z<DesktopSettings> = z.object({
   mode: z.union(['compatibility', 'advanced'] as const).default('compatibility'),
   port: z.number().step(1).min(0).max(65_535).default(DESKTOP_DEFAULT_WEB_PORT),
-  harness: z.union(['deepseek', 'codex'] as const).default('deepseek'),
+  harness: z.string().pattern(/^(?:deepseek|codex|custom_[a-f0-9]{32})$/u).default('deepseek'),
   logLevel: z.union(['debug', 'info', 'warn', 'error'] as const).default('info'),
 })
 
@@ -118,8 +123,8 @@ export interface Config {
   mode: DesktopShellMode
   /** Configured loopback Web port used to detect restart-applied settings changes. */
   port: number
-  /** Primary AgentFactory selected before the Loader graph mounts. */
-  harness: Extract<HarnessKind, 'deepseek' | 'codex'>
+  /** Primary AgentFactory id selected before the Loader graph mounts. */
+  harness: string
   /** Initial window width in CSS pixels. */
   width: number
   /** Initial window height in CSS pixels. */
@@ -134,7 +139,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   mode: z.union(['compatibility', 'advanced'] as const).default('compatibility'),
   port: z.number().step(1).min(0).max(65_535).default(DESKTOP_DEFAULT_WEB_PORT),
-  harness: z.union(['deepseek', 'codex'] as const).default('deepseek'),
+  harness: z.string().pattern(/^(?:deepseek|codex|custom_[a-f0-9]{32})$/u).default('deepseek'),
   width: z.number().step(1).min(800).default(1280),
   height: z.number().step(1).min(600).default(840),
   minWidth: z.number().step(1).min(640).default(900),
@@ -223,9 +228,9 @@ export function apply(ctx: Context, config: Config): void {
       [DESKTOP_PLUGINS_PATH, handleDesktopPluginsRequest],
       [DESKTOP_PLUGIN_TOGGLE_PATH, handleDesktopPluginToggleRequest],
       [DESKTOP_PLUGIN_ENTRY_TOGGLE_PATH, handleDesktopPluginEntryToggleRequest],
-      [DESKTOP_PLUGIN_CATEGORY_CREATE_PATH, handleDesktopPluginCategoryCreateRequest],
-      [DESKTOP_PLUGIN_CATEGORY_ASSIGN_PATH, handleDesktopPluginCategoryAssignRequest],
-      [DESKTOP_PLUGIN_CATEGORY_DELETE_PATH, handleDesktopPluginCategoryDeleteRequest],
+      [DESKTOP_HARNESS_CREATE_PATH, handleDesktopHarnessCreateRequest],
+      [DESKTOP_HARNESS_ASSIGN_PATH, handleDesktopHarnessAssignRequest],
+      [DESKTOP_HARNESS_DELETE_PATH, handleDesktopHarnessDeleteRequest],
       [DESKTOP_PLUGIN_RESTART_PATH, handleDesktopPluginRestartRequest],
       [DESKTOP_TERMINAL_OPEN_PATH, handleDesktopTerminalOpenRequest],
       [DESKTOP_DIAGNOSTICS_EXPORT_PATH, handleDesktopDiagnosticsExportRequest],

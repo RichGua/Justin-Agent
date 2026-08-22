@@ -26,14 +26,14 @@ export const DESKTOP_PLUGIN_TOGGLE_PATH = '/api/desktop/plugins/toggle'
 /** Persist one Cordis Loader entry enablement override. */
 export const DESKTOP_PLUGIN_ENTRY_TOGGLE_PATH = '/api/desktop/plugin-entries/toggle'
 
-/** Create one Profile-local plugin-management category. */
-export const DESKTOP_PLUGIN_CATEGORY_CREATE_PATH = '/api/desktop/plugin-categories/create'
+/** Create one Profile-local harness definition. */
+export const DESKTOP_HARNESS_CREATE_PATH = '/api/desktop/harnesses/create'
 
-/** Assign one Loader entry to a built-in or user-created category. */
-export const DESKTOP_PLUGIN_CATEGORY_ASSIGN_PATH = '/api/desktop/plugin-categories/assign'
+/** Assign one Loader entry to a harness or the common group. */
+export const DESKTOP_HARNESS_ASSIGN_PATH = '/api/desktop/harnesses/assign'
 
-/** Delete one user-created category and return its entries to their defaults. */
-export const DESKTOP_PLUGIN_CATEGORY_DELETE_PATH = '/api/desktop/plugin-categories/delete'
+/** Delete one user-created harness and return its entries to the common group. */
+export const DESKTOP_HARNESS_DELETE_PATH = '/api/desktop/harnesses/delete'
 
 /** Apply pending plugin changes through an orderly Desktop restart. */
 export const DESKTOP_PLUGIN_RESTART_PATH = '/api/desktop/plugins/restart'
@@ -138,24 +138,34 @@ export interface DesktopPluginBundleView {
 export interface DesktopPluginEntryView {
   readonly entryId: string
   readonly moduleName: string
-  /** Persisted state selected for the next generation. */
+  /** Persisted state selected for the next generation after harness linking. */
   readonly enabled: boolean
-  /** Category metadata; it never changes Loader behavior. */
-  readonly categoryId: string
+  /** Harness or generic group owning this entry. */
+  readonly harnessId: string
+  /** Whether this Loader row is a harness AgentFactory. */
+  readonly engine: boolean
+  /** Whether the primary harness selection, not the switch, owns this state. */
+  readonly locked: boolean
 }
 
-/** One built-in or user-created management category. */
-export interface DesktopPluginCategoryView {
+/** One built-in, common, or user-created harness group. */
+export interface DesktopPluginHarnessView {
   readonly id: string
   readonly name: string
   readonly builtIn: boolean
+  /** Loader row id of the AgentFactory owned by this harness; absent for common. */
+  readonly engine?: string
+  /** Whether this harness can own the primary AgentFactory selection. */
+  readonly selectable: boolean
 }
 
 /** Current direct-bundle inventory plus whether it differs from the running generation. */
 export interface DesktopPluginsResponse {
   readonly bundles: readonly DesktopPluginBundleView[]
   readonly entries: readonly DesktopPluginEntryView[]
-  readonly categories: readonly DesktopPluginCategoryView[]
+  readonly harnesses: readonly DesktopPluginHarnessView[]
+  /** Primary AgentFactory id fixed for the running generation. */
+  readonly primaryHarness: string
   readonly restartRequired: boolean
 }
 
@@ -170,17 +180,18 @@ export interface DesktopPluginEntryToggleRequest {
   readonly enabled: boolean
 }
 
-export interface DesktopPluginCategoryCreateRequest {
+export interface DesktopHarnessCreateRequest {
   readonly name: string
+  readonly engine?: string
 }
 
-export interface DesktopPluginCategoryAssignRequest {
+export interface DesktopHarnessAssignRequest {
   readonly entryId: string
-  readonly categoryId: string
+  readonly harnessId: string
 }
 
-export interface DesktopPluginCategoryDeleteRequest {
-  readonly categoryId: string
+export interface DesktopHarnessDeleteRequest {
+  readonly harnessId: string
 }
 
 /** Fresh inventory returned after a persisted toggle. */
@@ -189,7 +200,7 @@ export interface DesktopPluginToggleResponse extends DesktopPluginsResponse {
 }
 
 export type DesktopPluginEntryToggleResponse = DesktopPluginToggleResponse
-export type DesktopPluginCategoryMutationResponse = DesktopPluginToggleResponse
+export type DesktopHarnessMutationResponse = DesktopPluginToggleResponse
 
 /** Exact empty body accepted by the plugin restart endpoint. */
 export type DesktopPluginRestartRequest = Readonly<Record<string, never>>

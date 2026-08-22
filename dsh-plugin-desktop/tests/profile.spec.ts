@@ -563,16 +563,16 @@ describe('desktop profile composition', {
     }))
   })
 
-  it('applies Loader entry switches as the final standard id/disabled patch layer', () => {
+  it('links harness engine rows to the primary selection as the final patch layer', () => {
     const home = temporaryHome()
     const profile = ensureDesktopProfile(home)
     mkdirSync(join(profile, '.rundeep'), { recursive: true })
     writeFileSync(join(profile, '.rundeep', 'plugins.json'), JSON.stringify({
-      version: 1,
-      categories: [{ id: `custom_${'a'.repeat(32)}`, name: '管理分类' }],
+      version: 2,
+      harnesses: [],
       entries: [
-        { id: 'agent-loop', enabled: false, category: `custom_${'a'.repeat(32)}` },
-        { id: 'codex-harness', enabled: true },
+        { id: 'agent-loop', harness: 'deepseek', enabled: false },
+        { id: 'codex-harness', harness: 'codex', enabled: true },
         { id: 'stale-entry', enabled: false },
       ],
     }) + '\n')
@@ -580,10 +580,11 @@ describe('desktop profile composition', {
     const prepared = prepareDesktopProfile(undefined, home, 'darwin')
     const rows = composeEntries([prepared.patches])
 
-    expect(rows.find(row => row.id === 'agent-loop')?.disabled).toBe(true)
-    expect(rows.find(row => row.id === 'codex-harness')?.disabled).toBe(false)
-    expect(prepared.patches).toContainEqual({ id: 'agent-loop', disabled: true })
-    expect(prepared.patches).toContainEqual({ id: 'codex-harness', disabled: false })
+    // The primary harness owns the engines regardless of stale manual intent.
+    expect(rows.find(row => row.id === 'agent-loop')?.disabled).toBe(false)
+    expect(rows.find(row => row.id === 'codex-harness')?.disabled).toBe(true)
+    expect(prepared.patches).toContainEqual({ id: 'agent-loop', disabled: false })
+    expect(prepared.patches).toContainEqual({ id: 'codex-harness', disabled: true })
     expect(prepared.patches).not.toContainEqual({ id: 'stale-entry', disabled: true })
   })
 
@@ -613,7 +614,7 @@ describe('desktop profile composition', {
       'must be "compatibility" or "advanced"',
     )
     expect(() => desktopStartupSettingsFromSettings({ 'dsh-desktop': { harness: 'both' } })).toThrow(
-      'harness must be "deepseek" or "codex"',
+      'harness must be "deepseek", "codex", or a custom harness id',
     )
     for (const port of [-1, 1.5, 65_536, '43189']) {
       expect(() => desktopStartupSettingsFromSettings({ 'dsh-desktop': { port } })).toThrow(

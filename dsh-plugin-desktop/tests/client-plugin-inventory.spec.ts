@@ -3,21 +3,23 @@ import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DesktopPluginsView, DesktopSettingsApi } from '../src/client/desktop-settings-api.ts'
-import { HarnessPluginInventory, pluginFamilyOf } from '../src/client/plugin-inventory.tsx'
+import { HarnessPluginInventory } from '../src/client/plugin-inventory.tsx'
 
 afterEach(cleanup)
 
 const plugins: DesktopPluginsView = {
   bundles: [],
-  categories: [
-    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
-    { id: 'codex', name: 'Codex Harness', builtIn: true },
+  harnesses: [
+    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true, engine: 'agent-loop', selectable: true },
+    { id: 'codex', name: 'Codex Harness', builtIn: true, engine: 'codex-harness', selectable: true },
+    { id: 'common', name: 'Common Plugins', builtIn: true, selectable: false },
   ],
   entries: [
-    { entryId: 'agent-loop', moduleName: '@deepseek-ai/dsh-agent-loop', enabled: true, categoryId: 'deepseek' },
-    { entryId: 'subagent-codex', moduleName: '@deepseek-ai/dsh-subagent-codex', enabled: false, categoryId: 'deepseek' },
-    { entryId: 'codex-harness', moduleName: 'dsh-plugin-desktop/codex-harness', enabled: false, categoryId: 'codex' },
+    { entryId: 'agent-loop', moduleName: '@deepseek-ai/dsh-agent-loop', enabled: true, harnessId: 'deepseek', engine: true, locked: true },
+    { entryId: 'subagent-codex', moduleName: '@deepseek-ai/dsh-subagent-codex', enabled: false, harnessId: 'common', engine: false, locked: false },
+    { entryId: 'codex-harness', moduleName: 'dsh-plugin-desktop/codex-harness', enabled: false, harnessId: 'codex', engine: true, locked: true },
   ],
+  primaryHarness: 'deepseek',
   restartRequired: false,
 }
 
@@ -29,62 +31,71 @@ function api(overrides: Partial<DesktopSettingsApi> = {}) {
       entries: plugins.entries.map(entry => entry.entryId === entryId ? { ...entry, enabled } : entry),
       restartRequired: true,
     })),
-    createPluginCategory: vi.fn(),
-    assignPluginCategory: vi.fn(),
-    deletePluginCategory: vi.fn(),
+    createHarness: vi.fn(),
+    assignHarness: vi.fn(),
+    deleteHarness: vi.fn(),
     restartPlugins: vi.fn(async () => ({ accepted: true as const, restartRequired: true })),
     ...overrides,
   } satisfies Pick<DesktopSettingsApi,
-    'readPlugins' | 'setPluginEntryEnabled' | 'createPluginCategory' | 'assignPluginCategory' | 'deletePluginCategory' | 'restartPlugins'>
+    'readPlugins' | 'setPluginEntryEnabled' | 'createHarness' | 'assignHarness' | 'deleteHarness' | 'restartPlugins'>
 }
 
 describe('RunDeep Harness plugin inventory', () => {
-  it('uses only the Codex SDK adapter for the default Codex classification', () => {
-    expect(pluginFamilyOf('dsh-plugin-desktop/codex-harness')).toBe('codex')
-    expect(pluginFamilyOf('@deepseek-ai/dsh-subagent-codex')).toBe('deepseek')
-    expect(pluginFamilyOf('third-party-plugin')).toBe('deepseek')
-  })
-
-  it('shows exactly the two default categories and a real switch on every Loader row', async () => {
+  it('shows the three built-in groups and marks the active primary harness', async () => {
     const client = api()
     render(createElement(HarnessPluginInventory, { api: client, t: (key: string) => key } as never))
 
     expect(await screen.findByRole('button', { name: 'collapse: DeepSeek Harness' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'collapse: Codex Harness' })).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(3)
-    expect(screen.queryByText(/immutable|managed/u)).toBeNull()
+    expect(screen.getByRole('button', { name: 'collapse: common' })).toBeTruthy()
+    expect(screen.getByText('primary')).toBeTruthy()
+    // Engine rows render but their switches are locked by the harness setting.
+    const switches = screen.getAllByRole('switch')
+    expect(switches).toHaveLength(3)
+    expect((switches[0] as HTMLButtonElement).disabled).toBe(true)
+    expect((switches[1] as HTMLButtonElement).disabled).toBe(true)
+    expect((switches[2] as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('switch', { name: 'enable: subagent-codex' })).toBeTruthy()
+  })
 
-    fireEvent.click(screen.getByRole('switch', { name: 'enable: codex-harness' }))
+  it('toggles a common-group entry and reports a restart', async () => {
+    const client = api()
+    render(createElement(HarnessPluginInventory, { api: client, t: (key: string) => key } as never))
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'enable: subagent-codex' }))
     await waitFor(() => {
-      expect(client.setPluginEntryEnabled).toHaveBeenCalledWith('codex-harness', true)
-      expect(screen.getByRole('switch', { name: 'disable: codex-harness' })).toBeTruthy()
+      expect(client.setPluginEntryEnabled).toHaveBeenCalledWith('subagent-codex', true)
+      expect(screen.getByRole('switch', { name: 'disable: subagent-codex' })).toBeTruthy()
     })
     expect(screen.getByRole('button', { name: 'restart' })).toBeTruthy()
   })
 
-  it('creates a user category and assigns an entry without inventing a third default group', async () => {
-    const category = { id: `custom_${'a'.repeat(32)}`, name: '我的工具', builtIn: false }
-    const withCategory: DesktopPluginsView = { ...plugins, categories: [...plugins.categories, category] }
+  it('creates a user harness, assigns an entry, and deletes it again', async () => {
+    const harness = { id: `custom_${'a'.repeat(32)}`, name: '我的工具', builtIn: false, selectable: false }
+    const withHarness: DesktopPluginsView = { ...plugins, harnesses: [...plugins.harnesses, harness] }
     const assigned: DesktopPluginsView = {
-      ...withCategory,
-      entries: withCategory.entries.map(entry => entry.entryId === 'subagent-codex'
-        ? { ...entry, categoryId: category.id }
+      ...withHarness,
+      entries: withHarness.entries.map(entry => entry.entryId === 'subagent-codex'
+        ? { ...entry, harnessId: harness.id, locked: true }
         : entry),
     }
     const client = api({
-      createPluginCategory: vi.fn(async () => withCategory),
-      assignPluginCategory: vi.fn(async () => assigned),
-      deletePluginCategory: vi.fn(async () => plugins),
+      createHarness: vi.fn(async () => withHarness),
+      assignHarness: vi.fn(async () => assigned),
+      deleteHarness: vi.fn(async () => plugins),
     })
     render(createElement(HarnessPluginInventory, { api: client, t: (key: string) => key } as never))
 
-    fireEvent.change(await screen.findByPlaceholderText('categoryName'), { target: { value: '我的工具' } })
-    fireEvent.click(screen.getByRole('button', { name: 'createCategory' }))
+    fireEvent.change(await screen.findByPlaceholderText('harnessName'), { target: { value: '我的工具' } })
+    fireEvent.click(screen.getByRole('button', { name: 'createHarness' }))
     expect(await screen.findByRole('button', { name: 'collapse: 我的工具' })).toBeTruthy()
 
-    const categorySelect = screen.getByLabelText('category: subagent-codex')
-    fireEvent.change(categorySelect, { target: { value: category.id } })
-    await waitFor(() => { expect(client.assignPluginCategory).toHaveBeenCalledWith('subagent-codex', category.id) })
-    expect(screen.getByRole('button', { name: 'deleteCategory: 我的工具' })).toBeTruthy()
+    const harnessSelect = screen.getByLabelText('harness: subagent-codex')
+    fireEvent.change(harnessSelect, { target: { value: harness.id } })
+    await waitFor(() => { expect(client.assignHarness).toHaveBeenCalledWith('subagent-codex', harness.id) })
+    expect(screen.getByRole('button', { name: 'deleteHarness: 我的工具' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'deleteHarness: 我的工具' }))
+    await waitFor(() => { expect(client.deleteHarness).toHaveBeenCalledWith(harness.id) })
   })
 })

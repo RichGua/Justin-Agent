@@ -6,7 +6,8 @@ import {
 import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  DesktopMarketProvider, DesktopProfileView, DesktopSettingsApi, DesktopSettingsView,
+  DesktopMarketProvider, DesktopPluginHarnessView, DesktopPluginsView, DesktopProfileView,
+  DesktopSettingsApi, DesktopSettingsView,
 } from './desktop-settings-api.ts'
 import type { DesktopSettingsLocaleKey } from './desktop-settings-locales.ts'
 import type { DesktopClientPlatform } from './environment.ts'
@@ -15,7 +16,8 @@ import type { DesktopClientPlatform } from './environment.ts'
 export interface DesktopShellSettings {
   readonly mode: 'compatibility' | 'advanced'
   readonly port: number
-  readonly harness: 'deepseek' | 'codex'
+  /** Primary AgentFactory id; a built-in or user-created harness. */
+  readonly harness: string
   readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
 }
 
@@ -44,7 +46,7 @@ export type DesktopSettingsSectionProps =
   & InjectFace<DesktopSettingsSectionInjected>
 
 type Translate = DesktopSettingsSectionProps['t']
-type BusyOperation = 'load' | 'create-profile' | 'select-profile' | 'delete-profile' | 'select-market' | 'mode' | 'notification'
+type BusyOperation = 'load' | 'create-profile' | 'select-profile' | 'delete-profile' | 'select-market' | 'mode' | 'harness' | 'notification'
 type RestartState = 'none' | 'restarting' | 'required'
 
 function useScope<T>(scope: SettingsScope<T>) {
@@ -187,6 +189,13 @@ function marketBody(option: (typeof MARKET_OPTIONS)[number], t: Translate): Reac
   )
 }
 
+/** Built-in harness names are localized; custom harnesses keep their own names. */
+function harnessOption(harness: DesktopPluginHarnessView, t: Translate): { title: ReactNode; body: ReactNode } {
+  if (harness.id === 'deepseek') return { title: t('deepseekHarness'), body: t('deepseekHarnessBody') }
+  if (harness.id === 'codex') return { title: t('codexHarness'), body: t('codexHarnessBody') }
+  return { title: harness.name, body: t('harnessCustomBody') }
+}
+
 /** Render the Desktop settings page. */
 export function DesktopSettingsSection({
   t,
@@ -199,6 +208,7 @@ export function DesktopSettingsSection({
   const desktop = useScope(desktopSettings)
   const notifications = useScope(notificationSettings)
   const [view, setView] = useState<DesktopSettingsView>()
+  const [harnessView, setHarnessView] = useState<DesktopPluginsView>()
   const [profileName, setProfileName] = useState('')
   const [busy, setBusy] = useState<BusyOperation | undefined>('load')
   const [loadFailed, setLoadFailed] = useState(false)
@@ -212,6 +222,7 @@ export function DesktopSettingsSection({
     setOperationFailed(false)
     try {
       setView(await api.read())
+      setHarnessView(await api.readPlugins())
     } catch {
       setLoadFailed(true)
     } finally {
@@ -288,6 +299,13 @@ export function DesktopSettingsSection({
   const setMode = (next: DesktopShellSettings['mode']): void => {
     void run('mode', async () => {
       await desktopSettings.set('mode', next)
+      requestRestart()
+    })
+  }
+
+  const setHarness = (next: string): void => {
+    void run('harness', async () => {
+      await desktopSettings.set('harness', next)
       requestRestart()
     })
   }
@@ -455,6 +473,33 @@ export function DesktopSettingsSection({
             status={mode === 'advanced' ? t('selected') : undefined}
           />
         </div>
+      </section>
+
+      <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-harness-title">
+        <div>
+          <h3 id="dsh-desktop-harness-title">{t('harnessTitle')}</h3>
+          <p className="dshDesktopSettingsGroupIntro">{t('harnessIntro')}</p>
+        </div>
+        {desktop.status === 'unavailable' && <p className="dshDesktopSettingsNotice">{t('readOnly')}</p>}
+        {harnessView !== undefined && (
+          <div className="dshDesktopSettingsList" role="radiogroup" aria-labelledby="dsh-desktop-harness-title">
+            {harnessView.harnesses.filter(harness => harness.selectable).map(harness => {
+              const option = harnessOption(harness, t)
+              const current = (desktop.value?.harness ?? 'deepseek') === harness.id
+              return (
+                <Choice
+                  key={harness.id}
+                  title={option.title}
+                  body={option.body}
+                  selected={current}
+                  disabled={!settingsWritable || busy !== undefined || restart !== 'none'}
+                  action={() => { setHarness(harness.id) }}
+                  status={current ? t('selected') : undefined}
+                />
+              )
+            })}
+          </div>
+        )}
       </section>
 
       <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-notifications-title">

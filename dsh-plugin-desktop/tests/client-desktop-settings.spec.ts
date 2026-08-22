@@ -39,12 +39,16 @@ const PLUGINS = {
     entryId: 'subagent-codex',
     moduleName: '@deepseek-ai/dsh-subagent-codex',
     enabled: true,
-    categoryId: 'deepseek',
+    harnessId: 'common',
+    engine: false,
+    locked: false,
   }],
-  categories: [
-    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
-    { id: 'codex', name: 'Codex Harness', builtIn: true },
+  harnesses: [
+    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true, engine: 'agent-loop', selectable: true },
+    { id: 'codex', name: 'Codex Harness', builtIn: true, engine: 'codex-harness', selectable: true },
+    { id: 'common', name: 'Common Plugins', builtIn: true, selectable: false },
   ],
+  primaryHarness: 'deepseek',
   restartRequired: false,
 }
 
@@ -82,9 +86,9 @@ describe('Desktop settings API', () => {
       if (path === desktopSettingsPaths.plugins) return json(PLUGINS)
       if (path === desktopSettingsPaths.pluginToggle) return json({ accepted: true, ...PLUGINS, restartRequired: true })
       if (path === desktopSettingsPaths.pluginEntryToggle
-        || path === desktopSettingsPaths.pluginCategoryCreate
-        || path === desktopSettingsPaths.pluginCategoryAssign
-        || path === desktopSettingsPaths.pluginCategoryDelete) {
+        || path === desktopSettingsPaths.harnessCreate
+        || path === desktopSettingsPaths.harnessAssign
+        || path === desktopSettingsPaths.harnessDelete) {
         return json({ accepted: true, ...PLUGINS })
       }
       return path === desktopSettingsPaths.settings || path === desktopSettingsPaths.profileCreate || path === desktopSettingsPaths.profileDelete
@@ -101,9 +105,9 @@ describe('Desktop settings API', () => {
     await expect(api.readPlugins()).resolves.toEqual(PLUGINS)
     await expect(api.setPluginEnabled(PLUGINS.bundles[0]!.bundleId, false)).resolves.toEqual({ ...PLUGINS, restartRequired: true })
     await expect(api.setPluginEntryEnabled('subagent-codex', false)).resolves.toEqual(PLUGINS)
-    await expect(api.createPluginCategory('Tools')).resolves.toEqual(PLUGINS)
-    await expect(api.assignPluginCategory('subagent-codex', 'codex')).resolves.toEqual(PLUGINS)
-    await expect(api.deletePluginCategory(`custom_${'a'.repeat(32)}`)).resolves.toEqual(PLUGINS)
+    await expect(api.createHarness('Tools')).resolves.toEqual(PLUGINS)
+    await expect(api.assignHarness('subagent-codex', 'codex')).resolves.toEqual(PLUGINS)
+    await expect(api.deleteHarness(`custom_${'a'.repeat(32)}`)).resolves.toEqual(PLUGINS)
     await expect(api.restartPlugins()).resolves.toEqual({ accepted: true, restartRequired: true })
     await expect(api.openTerminal()).resolves.toBeUndefined()
 
@@ -116,9 +120,9 @@ describe('Desktop settings API', () => {
       desktopSettingsPaths.plugins,
       desktopSettingsPaths.pluginToggle,
       desktopSettingsPaths.pluginEntryToggle,
-      desktopSettingsPaths.pluginCategoryCreate,
-      desktopSettingsPaths.pluginCategoryAssign,
-      desktopSettingsPaths.pluginCategoryDelete,
+      desktopSettingsPaths.harnessCreate,
+      desktopSettingsPaths.harnessAssign,
+      desktopSettingsPaths.harnessDelete,
       desktopSettingsPaths.pluginRestart,
       desktopSettingsPaths.terminalOpen,
     ])

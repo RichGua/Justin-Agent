@@ -1,4 +1,4 @@
-/** Profile-scoped management for the effective Cordis Loader plugin tree. */
+/** Profile-scoped harness plugin sets over the effective Cordis Loader plugin tree. */
 
 import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
@@ -6,71 +6,99 @@ import { chmod, lstat, mkdir } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import {
+  COMMON_HARNESS_ID,
+  CUSTOM_HARNESS_ID_PATTERN,
+  DEEPSEEK_HARNESS_ID,
+  HARNESS_PROVIDERS,
+  harnessProviderForEngine,
+  type CustomHarnessId,
+  type HarnessId,
+  type PrimaryHarnessId,
+} from './harnesses.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
-const STATE_VERSION = 1
+const STATE_VERSION = 2
 const STATE_FILE = join('.rundeep', 'plugins.json')
 const STATE_FILE_MODE = 0o600
 const STATE_DIRECTORY_MODE = 0o700
 const MAX_STATE_BYTES = 256 * 1024
 const MAX_ENTRIES = 2048
-const MAX_CATEGORIES = 64
-const MAX_CATEGORY_NAME_LENGTH = 64
+const MAX_HARNESSES = 64
+const MAX_HARNESS_NAME_LENGTH = 64
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9._:@/-]{1,256}$/u
-const CUSTOM_CATEGORY_ID_PATTERN = /^custom_[a-f0-9]{32}$/u
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u
 
-export const DEEPSEEK_PLUGIN_CATEGORY_ID = 'deepseek'
-export const CODEX_PLUGIN_CATEGORY_ID = 'codex'
-export const CODEX_HARNESS_ENTRY_ID = 'codex-harness'
-export const DEEPSEEK_HARNESS_ENTRY_ID = 'agent-loop'
+/** Stable built-in group names; the client localizes built-in ids. */
+export const BUILTIN_HARNESS_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  [DEEPSEEK_HARNESS_ID]: 'DeepSeek Harness',
+  codex: 'Codex Harness',
+  [COMMON_HARNESS_ID]: 'Common Plugins',
+})
+
+/** Legacy v1 category ids that map to built-in harnesses during migration. */
+const LEGACY_BUILTIN_CATEGORY_IDS = new Set<string>([DEEPSEEK_HARNESS_ID, 'codex'])
+
+interface StoredPluginHarness {
+  readonly id: CustomHarnessId
+  readonly name: string
+  readonly engine?: string
+}
 
 interface StoredPluginEntry {
   readonly id: string
   readonly enabled?: boolean
-  readonly category?: string
-}
-
-interface StoredPluginCategory {
-  readonly id: string
-  readonly name: string
+  readonly harness?: HarnessId
 }
 
 export interface DesktopPluginEntryState {
-  readonly version: 1
+  readonly version: 2
+  readonly harnesses: readonly StoredPluginHarness[]
   readonly entries: readonly StoredPluginEntry[]
-  readonly categories: readonly StoredPluginCategory[]
 }
 
 export interface DesktopPluginEntryView {
   readonly entryId: string
   readonly moduleName: string
-  /** Persisted state used by the next generation. */
+  /** Persisted state used by the next generation after harness linking. */
   readonly enabled: boolean
   /** Effective state in the currently running Loader tree. */
   readonly runtimeEnabled: boolean
-  readonly categoryId: string
+  /** Harness or generic group owning this entry. */
+  readonly harnessId: HarnessId
+  /** Whether this Loader row is a harness AgentFactory. */
+  readonly engine: boolean
+  /** Whether the primary harness selection, not the switch, owns this state. */
+  readonly locked: boolean
 }
 
-export interface DesktopPluginCategoryView {
-  readonly id: string
+export interface DesktopPluginHarnessView {
+  readonly id: HarnessId
   readonly name: string
   readonly builtIn: boolean
+  /** Loader row id of the AgentFactory owned by this harness; absent for common. */
+  readonly engine?: string
+  /** Whether this harness can own the primary AgentFactory selection. */
+  readonly selectable: boolean
 }
 
 export interface DesktopPluginEntrySnapshot {
   readonly entries: readonly DesktopPluginEntryView[]
-  readonly categories: readonly DesktopPluginCategoryView[]
+  readonly harnesses: readonly DesktopPluginHarnessView[]
+  /** Primary AgentFactory id fixed for the running generation. */
+  readonly primaryHarness: PrimaryHarnessId
   readonly restartRequired: boolean
 }
 
 export interface DesktopPluginEntriesBootstrap {
   readonly profileDir: string
   readonly loader: Pick<Loader, 'entries'>
+  /** Primary AgentFactory selected before the current generation mounted. */
+  readonly primaryHarness: PrimaryHarnessId
 }
 
 function emptyState(): DesktopPluginEntryState {
-  return { version: STATE_VERSION, entries: [], categories: [] }
+  return { version: STATE_VERSION, harnesses: [], entries: [] }
 }
 
 function isExactKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
@@ -78,33 +106,34 @@ function isExactKeys(value: Record<string, unknown>, allowed: readonly string[])
   return keys.every(key => allowed.includes(key))
 }
 
-function parseCategoryName(value: unknown): string {
-  if (typeof value !== 'string') throw new Error('category name must be a string')
+function parseHarnessName(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('harness name must be a string')
   const name = value.trim()
-  if (name.length === 0 || name.length > MAX_CATEGORY_NAME_LENGTH
+  if (name.length === 0 || name.length > MAX_HARNESS_NAME_LENGTH
     || CONTROL_CHARACTER_PATTERN.test(name)) {
-    throw new Error('category name is invalid')
+    throw new Error('harness name is invalid')
   }
   return name
 }
 
-function parseState(value: unknown): DesktopPluginEntryState {
+function parseLegacyV1State(value: unknown): DesktopPluginEntryState {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('state must be an object')
   }
   const record = value as Record<string, unknown>
   if (!isExactKeys(record, ['version', 'entries', 'categories'])
-    || record.version !== STATE_VERSION
+    || record.version !== 1
     || !Array.isArray(record.entries)
     || !Array.isArray(record.categories)
     || record.entries.length > MAX_ENTRIES
-    || record.categories.length > MAX_CATEGORIES) {
+    || record.categories.length > MAX_HARNESSES) {
     throw new Error('state shape is invalid')
   }
 
-  const categories: StoredPluginCategory[] = []
-  const categoryIds = new Set<string>()
-  const categoryNames = new Set<string>(['deepseek harness', 'codex harness'])
+  const harnessNames = new Set<string>(Object.values(BUILTIN_HARNESS_NAMES)
+    .map(name => name.toLocaleLowerCase()))
+  const harnesses: StoredPluginHarness[] = []
+  const harnessIds = new Set<string>()
   for (const raw of record.categories) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
       throw new Error('category is invalid')
@@ -112,17 +141,17 @@ function parseState(value: unknown): DesktopPluginEntryState {
     const category = raw as Record<string, unknown>
     if (!isExactKeys(category, ['id', 'name'])
       || typeof category.id !== 'string'
-      || !CUSTOM_CATEGORY_ID_PATTERN.test(category.id)) {
+      || !CUSTOM_HARNESS_ID_PATTERN.test(category.id)) {
       throw new Error('category is invalid')
     }
-    const name = parseCategoryName(category.name)
+    const name = parseHarnessName(category.name)
     const normalizedName = name.toLocaleLowerCase()
-    if (categoryIds.has(category.id) || categoryNames.has(normalizedName)) {
+    if (harnessIds.has(category.id) || harnessNames.has(normalizedName)) {
       throw new Error('category is duplicated')
     }
-    categoryIds.add(category.id)
-    categoryNames.add(normalizedName)
-    categories.push({ id: category.id, name })
+    harnessIds.add(category.id)
+    harnessNames.add(normalizedName)
+    harnesses.push({ id: category.id as CustomHarnessId, name })
   }
 
   const entries: StoredPluginEntry[] = []
@@ -138,9 +167,8 @@ function parseState(value: unknown): DesktopPluginEntryState {
       || (entry.enabled !== undefined && typeof entry.enabled !== 'boolean')
       || (entry.category !== undefined
         && (typeof entry.category !== 'string'
-          || (!categoryIds.has(entry.category)
-            && entry.category !== DEEPSEEK_PLUGIN_CATEGORY_ID
-            && entry.category !== CODEX_PLUGIN_CATEGORY_ID)))
+          || (!harnessIds.has(entry.category)
+            && !LEGACY_BUILTIN_CATEGORY_IDS.has(entry.category))))
       || (entry.enabled === undefined && entry.category === undefined)
       || entryIds.has(entry.id)) {
       throw new Error('entry state is invalid')
@@ -149,10 +177,94 @@ function parseState(value: unknown): DesktopPluginEntryState {
     entries.push({
       id: entry.id,
       ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }),
-      ...(entry.category === undefined ? {} : { category: entry.category }),
+      ...(entry.category === undefined ? {} : { harness: entry.category as HarnessId }),
     })
   }
-  return { version: STATE_VERSION, entries, categories }
+  return { version: STATE_VERSION, harnesses, entries }
+}
+
+function parseState(value: unknown): DesktopPluginEntryState {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('state must be an object')
+  }
+  const record = value as Record<string, unknown>
+  if (record.version === 1) return parseLegacyV1State(value)
+  if (!isExactKeys(record, ['version', 'harnesses', 'entries'])
+    || record.version !== STATE_VERSION
+    || !Array.isArray(record.harnesses)
+    || !Array.isArray(record.entries)
+    || record.harnesses.length > MAX_HARNESSES
+    || record.entries.length > MAX_ENTRIES) {
+    throw new Error('state shape is invalid')
+  }
+
+  const harnessNames = new Set<string>(Object.values(BUILTIN_HARNESS_NAMES)
+    .map(name => name.toLocaleLowerCase()))
+  const harnesses: StoredPluginHarness[] = []
+  const harnessIds = new Set<string>()
+  const engineOwners = new Map<string, CustomHarnessId>()
+  for (const raw of record.harnesses) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      throw new Error('harness is invalid')
+    }
+    const harness = raw as Record<string, unknown>
+    if (!isExactKeys(harness, ['id', 'name', 'engine'])
+      || typeof harness.id !== 'string'
+      || !CUSTOM_HARNESS_ID_PATTERN.test(harness.id)
+      || (harness.engine !== undefined
+        && (typeof harness.engine !== 'string' || !ENTRY_ID_PATTERN.test(harness.engine)))) {
+      throw new Error('harness is invalid')
+    }
+    const name = parseHarnessName(harness.name)
+    const normalizedName = name.toLocaleLowerCase()
+    if (harnessIds.has(harness.id) || harnessNames.has(normalizedName)) {
+      throw new Error('harness is duplicated')
+    }
+    harnessIds.add(harness.id)
+    harnessNames.add(normalizedName)
+    if (harness.engine !== undefined) {
+      const engine = harness.engine as string
+      if (engineOwners.has(engine)) {
+        throw new Error('harness engine is duplicated')
+      }
+      engineOwners.set(engine, harness.id as CustomHarnessId)
+    }
+    harnesses.push({
+      id: harness.id as CustomHarnessId,
+      name,
+      ...(harness.engine === undefined ? {} : { engine: harness.engine as string }),
+    })
+  }
+
+  const entries: StoredPluginEntry[] = []
+  const entryIds = new Set<string>()
+  for (const raw of record.entries) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      throw new Error('entry state is invalid')
+    }
+    const entry = raw as Record<string, unknown>
+    if (!isExactKeys(entry, ['id', 'enabled', 'harness'])
+      || typeof entry.id !== 'string'
+      || !ENTRY_ID_PATTERN.test(entry.id)
+      || (entry.enabled !== undefined && typeof entry.enabled !== 'boolean')
+      || (entry.harness !== undefined
+        && (typeof entry.harness !== 'string'
+          || (!harnessIds.has(entry.harness)
+            && entry.harness !== DEEPSEEK_HARNESS_ID
+            && entry.harness !== 'codex'
+            && entry.harness !== COMMON_HARNESS_ID)))
+      || (entry.enabled === undefined && entry.harness === undefined)
+      || entryIds.has(entry.id)) {
+      throw new Error('entry state is invalid')
+    }
+    entryIds.add(entry.id)
+    entries.push({
+      id: entry.id,
+      ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }),
+      ...(entry.harness === undefined ? {} : { harness: entry.harness as HarnessId }),
+    })
+  }
+  return { version: STATE_VERSION, harnesses, entries }
 }
 
 function renderState(state: DesktopPluginEntryState): string {
@@ -184,19 +296,58 @@ export function readDesktopPluginEntryState(profileDir: string): DesktopPluginEn
   }
 }
 
-/** Read only persisted enabled overrides for official Cordis patch composition. */
-export function readDesktopPluginEntryOverrides(profileDir: string): ReadonlyMap<string, boolean> {
-  return new Map(
-    readDesktopPluginEntryState(profileDir).entries
-      .filter((entry): entry is StoredPluginEntry & { enabled: boolean } => entry.enabled !== undefined)
-      .map(entry => [entry.id, entry.enabled]),
-  )
+/** Return the harness or group that owns one Loader row by default. */
+export function defaultHarnessId(entryId: string): HarnessId {
+  return harnessProviderForEngine(entryId)?.id ?? COMMON_HARNESS_ID
 }
 
-function defaultCategory(entryId: string): string {
-  return entryId === CODEX_HARNESS_ENTRY_ID
-    ? CODEX_PLUGIN_CATEGORY_ID
-    : DEEPSEEK_PLUGIN_CATEGORY_ID
+/** Fall back to DeepSeek when a stored primary harness id is no longer valid. */
+export function resolvePrimaryHarness(
+  value: PrimaryHarnessId,
+  state: DesktopPluginEntryState,
+): PrimaryHarnessId {
+  if (value === DEEPSEEK_HARNESS_ID || value === 'codex') return value
+  return state.harnesses.some(harness => harness.id === value) ? value : DEEPSEEK_HARNESS_ID
+}
+
+/** Every engine row id owned by a built-in or stored custom harness. */
+function engineRows(state: DesktopPluginEntryState): ReadonlyMap<string, HarnessId> {
+  const owners = new Map<string, HarnessId>()
+  for (const provider of HARNESS_PROVIDERS) owners.set(provider.engine, provider.id)
+  for (const harness of state.harnesses) {
+    if (harness.engine !== undefined) owners.set(harness.engine, harness.id)
+  }
+  return owners
+}
+
+/**
+ * Compute the intent patches that link the primary harness selection to every
+ * Loader row: the primary engine and its plugin set load, every other harness
+ * set stays disabled, and the common group keeps manual state.
+ */
+export function desktopHarnessEntryOverrides(
+  profileDir: string,
+  primaryHarness: PrimaryHarnessId,
+): ReadonlyMap<string, boolean> {
+  const state = readDesktopPluginEntryState(profileDir)
+  const primary = resolvePrimaryHarness(primaryHarness, state)
+  const engines = engineRows(state)
+  const overrides = new Map<string, boolean>()
+  for (const [engine, harnessId] of engines) {
+    overrides.set(engine, harnessId === primary)
+  }
+  for (const entry of state.entries) {
+    if (engines.has(entry.id)) continue
+    const harnessId = entry.harness ?? COMMON_HARNESS_ID
+    if (harnessId === primary) {
+      if (entry.enabled === false) overrides.set(entry.id, false)
+    } else if (harnessId === COMMON_HARNESS_ID) {
+      if (entry.enabled !== undefined) overrides.set(entry.id, entry.enabled)
+    } else {
+      overrides.set(entry.id, false)
+    }
+  }
+  return overrides
 }
 
 async function ensurePrivateStateDirectory(statePath: string): Promise<void> {
@@ -209,7 +360,7 @@ async function ensurePrivateStateDirectory(statePath: string): Promise<void> {
   await chmod(directory, STATE_DIRECTORY_MODE)
 }
 
-/** Persistent category and enablement mutations over the effective Loader tree. */
+/** Persistent harness-set and enablement mutations over the effective Loader tree. */
 export class DesktopPluginEntriesService {
   private readonly statePath: string
 
@@ -236,38 +387,77 @@ export class DesktopPluginEntriesService {
       .find(entry => !entry.options.group && entry.id === entryId)
   }
 
+  private isEngineRow(state: DesktopPluginEntryState, entryId: string): boolean {
+    return engineRows(state).has(entryId)
+  }
+
   snapshot(): DesktopPluginEntrySnapshot {
     const state = readDesktopPluginEntryState(this.bootstrap.profileDir)
     const stored = new Map(state.entries.map(entry => [entry.id, entry]))
-    const categoryIds = new Set([
-      DEEPSEEK_PLUGIN_CATEGORY_ID,
-      CODEX_PLUGIN_CATEGORY_ID,
-      ...state.categories.map(category => category.id),
-    ])
+    const engines = engineRows(state)
+    const primary = resolvePrimaryHarness(this.bootstrap.primaryHarness, state)
+    const harnesses: DesktopPluginHarnessView[] = [
+      ...HARNESS_PROVIDERS.map(provider => Object.freeze({
+        id: provider.id,
+        name: provider.name,
+        builtIn: true,
+        engine: provider.engine,
+        selectable: true,
+      })),
+      Object.freeze({
+        id: COMMON_HARNESS_ID as HarnessId,
+        name: BUILTIN_HARNESS_NAMES[COMMON_HARNESS_ID] ?? 'Common Plugins',
+        builtIn: true,
+        selectable: false,
+      }),
+      ...state.harnesses.map(harness => Object.freeze({
+        id: harness.id,
+        name: harness.name,
+        builtIn: false,
+        ...(harness.engine === undefined ? {} : { engine: harness.engine }),
+        selectable: harness.engine !== undefined,
+      })),
+    ]
     const entries: DesktopPluginEntryView[] = []
     for (const entry of this.bootstrap.loader.entries()) {
       if (entry.options.group) continue
       const saved = stored.get(entry.id)
       const runtimeEnabled = !entry.disabled
-      const enabled = saved?.enabled ?? runtimeEnabled
+      const engineHarness = engines.get(entry.id)
+      let harnessId: HarnessId
+      let enabled: boolean
+      let locked: boolean
+      if (engineHarness !== undefined) {
+        harnessId = engineHarness
+        enabled = engineHarness === primary
+        locked = true
+      } else {
+        harnessId = saved?.harness ?? COMMON_HARNESS_ID
+        if (harnessId === primary) {
+          enabled = saved?.enabled ?? true
+          locked = false
+        } else if (harnessId === COMMON_HARNESS_ID) {
+          enabled = saved?.enabled ?? runtimeEnabled
+          locked = false
+        } else {
+          enabled = false
+          locked = true
+        }
+      }
       entries.push(Object.freeze({
         entryId: entry.id,
         moduleName: entry.options.name,
         enabled,
         runtimeEnabled,
-        categoryId: saved?.category !== undefined && categoryIds.has(saved.category)
-          ? saved.category
-          : defaultCategory(entry.id),
+        harnessId,
+        engine: engineHarness !== undefined,
+        locked,
       }))
     }
-    const categories: DesktopPluginCategoryView[] = [
-      Object.freeze({ id: DEEPSEEK_PLUGIN_CATEGORY_ID, name: 'DeepSeek Harness', builtIn: true }),
-      Object.freeze({ id: CODEX_PLUGIN_CATEGORY_ID, name: 'Codex Harness', builtIn: true }),
-      ...state.categories.map(category => Object.freeze({ ...category, builtIn: false })),
-    ]
     return Object.freeze({
       entries: Object.freeze(entries),
-      categories: Object.freeze(categories),
+      harnesses: Object.freeze(harnesses),
+      primaryHarness: primary,
       restartRequired: entries.some(entry => entry.enabled !== entry.runtimeEnabled),
     })
   }
@@ -277,73 +467,94 @@ export class DesktopPluginEntriesService {
       throw new Error(`${BIN_NAME}: Loader plugin entry is unavailable`)
     }
     await this.mutate(state => {
+      if (this.isEngineRow(state, entryId)) {
+        throw new Error(`${BIN_NAME}: harness engine entries are controlled by the primary harness setting`)
+      }
       const updates = new Map(state.entries.map(entry => [entry.id, { ...entry }]))
       const current = updates.get(entryId) ?? { id: entryId }
       updates.set(entryId, { ...current, enabled })
-      if (enabled && entryId === CODEX_HARNESS_ENTRY_ID) {
-        const peer = updates.get(DEEPSEEK_HARNESS_ENTRY_ID) ?? { id: DEEPSEEK_HARNESS_ENTRY_ID }
-        updates.set(DEEPSEEK_HARNESS_ENTRY_ID, { ...peer, enabled: false })
-      } else if (enabled && entryId === DEEPSEEK_HARNESS_ENTRY_ID) {
-        const peer = updates.get(CODEX_HARNESS_ENTRY_ID) ?? { id: CODEX_HARNESS_ENTRY_ID }
-        updates.set(CODEX_HARNESS_ENTRY_ID, { ...peer, enabled: false })
-      }
       return { ...state, entries: [...updates.values()] }
     })
   }
 
-  async createCategory(name: string): Promise<string> {
-    const normalized = parseCategoryName(name)
-    const id = `custom_${randomBytes(16).toString('hex')}`
+  async createHarness(name: string, engine?: string): Promise<CustomHarnessId> {
+    const normalized = parseHarnessName(name)
+    const engineEntry = engine === undefined ? undefined : this.currentEntry(engine)
+    if (engine !== undefined && engineEntry === undefined) {
+      throw new Error(`${BIN_NAME}: harness engine Loader entry is unavailable`)
+    }
+    const id: CustomHarnessId = `custom_${randomBytes(16).toString('hex')}`
     await this.mutate(state => {
-      if (state.categories.some(category => category.name.toLocaleLowerCase() === normalized.toLocaleLowerCase())) {
-        throw new Error(`${BIN_NAME}: plugin category already exists`)
+      const takenNames = new Set<string>(Object.values(BUILTIN_HARNESS_NAMES)
+        .map(value => value.toLocaleLowerCase()))
+      for (const harness of state.harnesses) takenNames.add(harness.name.toLocaleLowerCase())
+      if (takenNames.has(normalized.toLocaleLowerCase())) {
+        throw new Error(`${BIN_NAME}: harness already exists`)
       }
-      if (state.categories.length >= MAX_CATEGORIES) {
-        throw new Error(`${BIN_NAME}: too many plugin categories`)
+      if (state.harnesses.length >= MAX_HARNESSES) {
+        throw new Error(`${BIN_NAME}: too many harnesses`)
       }
-      return { ...state, categories: [...state.categories, { id, name: normalized }] }
+      if (engine !== undefined && engineRows(state).has(engine)) {
+        throw new Error(`${BIN_NAME}: harness engine Loader row is already owned`)
+      }
+      return {
+        ...state,
+        harnesses: [...state.harnesses, {
+          id,
+          name: normalized,
+          ...(engine === undefined ? {} : { engine }),
+        }],
+      }
     })
     return id
   }
 
-  async assignCategory(entryId: string, categoryId: string): Promise<void> {
+  async assignHarness(entryId: string, harnessId: string): Promise<void> {
     if (this.currentEntry(entryId) === undefined) {
       throw new Error(`${BIN_NAME}: Loader plugin entry is unavailable`)
     }
     await this.mutate(state => {
-      const custom = state.categories.some(category => category.id === categoryId)
-      if (!custom && categoryId !== DEEPSEEK_PLUGIN_CATEGORY_ID && categoryId !== CODEX_PLUGIN_CATEGORY_ID) {
-        throw new Error(`${BIN_NAME}: plugin category is unavailable`)
+      if (this.isEngineRow(state, entryId)) {
+        throw new Error(`${BIN_NAME}: harness engine entries cannot be reassigned`)
+      }
+      const custom = state.harnesses.some(harness => harness.id === harnessId)
+      if (!custom && harnessId !== DEEPSEEK_HARNESS_ID
+        && harnessId !== 'codex' && harnessId !== COMMON_HARNESS_ID) {
+        throw new Error(`${BIN_NAME}: harness is unavailable`)
       }
       const updates = new Map(state.entries.map(entry => [entry.id, { ...entry }]))
       const current = updates.get(entryId) ?? { id: entryId }
-      if (categoryId === defaultCategory(entryId)) {
-        const { category: _category, ...rest } = current
+      if (harnessId === defaultHarnessId(entryId)) {
+        const { harness: _harness, ...rest } = current
         if (rest.enabled === undefined) updates.delete(entryId)
         else updates.set(entryId, rest)
       } else {
-        updates.set(entryId, { ...current, category: categoryId })
+        updates.set(entryId, { ...current, harness: harnessId as HarnessId })
       }
       return { ...state, entries: [...updates.values()] }
     })
   }
 
-  async deleteCategory(categoryId: string): Promise<void> {
-    if (!CUSTOM_CATEGORY_ID_PATTERN.test(categoryId)) {
-      throw new Error(`${BIN_NAME}: built-in plugin categories cannot be deleted`)
+  async deleteHarness(harnessId: string): Promise<void> {
+    if (!CUSTOM_HARNESS_ID_PATTERN.test(harnessId)) {
+      throw new Error(`${BIN_NAME}: built-in harnesses cannot be deleted`)
     }
     await this.mutate(state => {
-      if (!state.categories.some(category => category.id === categoryId)) {
-        throw new Error(`${BIN_NAME}: plugin category is unavailable`)
+      const target = state.harnesses.find(harness => harness.id === harnessId)
+      if (target === undefined) {
+        throw new Error(`${BIN_NAME}: harness is unavailable`)
+      }
+      if (target.id === this.bootstrap.primaryHarness) {
+        throw new Error(`${BIN_NAME}: the active primary harness cannot be deleted`)
       }
       const entries = state.entries.flatMap(entry => {
-        if (entry.category !== categoryId) return [entry]
-        const { category: _category, ...rest } = entry
+        if (entry.harness !== harnessId) return [entry]
+        const { harness: _harness, ...rest } = entry
         return rest.enabled === undefined ? [] : [rest]
       })
       return {
         ...state,
-        categories: state.categories.filter(category => category.id !== categoryId),
+        harnesses: state.harnesses.filter(harness => harness.id !== harnessId),
         entries,
       }
     })
@@ -351,7 +562,10 @@ export class DesktopPluginEntriesService {
 
   /** Apply persisted nested-tree overrides after Includes have mounted. */
   async reconcile(): Promise<void> {
-    const overrides = readDesktopPluginEntryOverrides(this.bootstrap.profileDir)
+    const overrides = desktopHarnessEntryOverrides(
+      this.bootstrap.profileDir,
+      this.bootstrap.primaryHarness,
+    )
     for (const [entryId, enabled] of overrides) {
       const entry = this.currentEntry(entryId)
       if (entry === undefined || !entryId.includes(':')) continue
@@ -367,8 +581,8 @@ export class DesktopPluginEntriesService {
 
 export const desktopPluginEntryLimits = Object.freeze({
   maxEntries: MAX_ENTRIES,
-  maxCategories: MAX_CATEGORIES,
-  maxCategoryNameLength: MAX_CATEGORY_NAME_LENGTH,
+  maxHarnesses: MAX_HARNESSES,
+  maxHarnessNameLength: MAX_HARNESS_NAME_LENGTH,
   entryIdPattern: ENTRY_ID_PATTERN,
-  customCategoryIdPattern: CUSTOM_CATEGORY_ID_PATTERN,
+  customHarnessIdPattern: CUSTOM_HARNESS_ID_PATTERN,
 })

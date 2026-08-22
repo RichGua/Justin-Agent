@@ -7,9 +7,9 @@ import type DesktopSettingsController from './desktop-settings-controller.ts'
 import type { DesktopSettingsPostResponse } from './desktop-settings-controller.ts'
 import type {
   DesktopMarketSelectRequest,
-  DesktopPluginCategoryAssignRequest,
-  DesktopPluginCategoryCreateRequest,
-  DesktopPluginCategoryDeleteRequest,
+  DesktopHarnessAssignRequest,
+  DesktopHarnessCreateRequest,
+  DesktopHarnessDeleteRequest,
   DesktopPluginEntryToggleRequest,
   DesktopProfileCreateRequest,
   DesktopProfileDeleteRequest,
@@ -20,7 +20,7 @@ import type {
 
 const BUNDLE_ID_PATTERN = /^bundle_[A-Za-z0-9_-]{32}$/u
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9._:@/-]{1,256}$/u
-const CATEGORY_ID_PATTERN = /^(?:deepseek|codex|custom_[a-f0-9]{32})$/u
+const HARNESS_ID_PATTERN = /^(?:deepseek|codex|common|custom_[a-f0-9]{32})$/u
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u
 
 const MAX_SETTINGS_BODY_BYTES = 16 * 1024
@@ -180,29 +180,38 @@ function parsePluginEntryToggleRequest(value: unknown): DesktopPluginEntryToggle
   return { entryId: record.entryId, enabled: record.enabled }
 }
 
-function parsePluginCategoryCreateRequest(value: unknown): DesktopPluginCategoryCreateRequest | undefined {
-  if (!isExactRecord(value, 'name') || typeof value.name !== 'string') return undefined
-  const name = value.name.trim()
+function parseHarnessCreateRequest(value: unknown): DesktopHarnessCreateRequest | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (keys.length !== 1 && keys.length !== 2) return undefined
+  if (!Object.prototype.hasOwnProperty.call(record, 'name')
+    || typeof record.name !== 'string') return undefined
+  const name = record.name.trim()
   if (name.length === 0 || name.length > 64 || CONTROL_CHARACTER_PATTERN.test(name)) return undefined
-  return { name }
+  if (keys.length === 1) return { name }
+  if (!Object.prototype.hasOwnProperty.call(record, 'engine')
+    || typeof record.engine !== 'string'
+    || !ENTRY_ID_PATTERN.test(record.engine)) return undefined
+  return { name, engine: record.engine }
 }
 
-function parsePluginCategoryAssignRequest(value: unknown): DesktopPluginCategoryAssignRequest | undefined {
+function parseHarnessAssignRequest(value: unknown): DesktopHarnessAssignRequest | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
   if (Object.keys(record).length !== 2
     || typeof record.entryId !== 'string'
     || !ENTRY_ID_PATTERN.test(record.entryId)
-    || typeof record.categoryId !== 'string'
-    || !CATEGORY_ID_PATTERN.test(record.categoryId)) return undefined
-  return { entryId: record.entryId, categoryId: record.categoryId }
+    || typeof record.harnessId !== 'string'
+    || !HARNESS_ID_PATTERN.test(record.harnessId)) return undefined
+  return { entryId: record.entryId, harnessId: record.harnessId }
 }
 
-function parsePluginCategoryDeleteRequest(value: unknown): DesktopPluginCategoryDeleteRequest | undefined {
-  if (!isExactRecord(value, 'categoryId')
-    || typeof value.categoryId !== 'string'
-    || !/^custom_[a-f0-9]{32}$/u.test(value.categoryId)) return undefined
-  return { categoryId: value.categoryId }
+function parseHarnessDeleteRequest(value: unknown): DesktopHarnessDeleteRequest | undefined {
+  if (!isExactRecord(value, 'harnessId')
+    || typeof value.harnessId !== 'string'
+    || !/^custom_[a-f0-9]{32}$/u.test(value.harnessId)) return undefined
+  return { harnessId: value.harnessId }
 }
 
 function isEmptyRequest(value: unknown): boolean {
@@ -445,8 +454,8 @@ export async function handleDesktopPluginEntryToggleRequest(
   }
 }
 
-/** Create one Profile-local management category. */
-export async function handleDesktopPluginCategoryCreateRequest(
+/** Create one Profile-local harness definition. */
+export async function handleDesktopHarnessCreateRequest(
   req: IncomingMessage,
   res: ServerResponse,
   expectedOrigin: string,
@@ -459,18 +468,18 @@ export async function handleDesktopPluginCategoryCreateRequest(
   }
   const value = await parsePostBody(req, res)
   if (value === INVALID_BODY) return
-  const request = parsePluginCategoryCreateRequest(value)
-  if (request === undefined) return finishJson(res, 400, error('invalid plugin category creation request'))
+  const request = parseHarnessCreateRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid harness creation request'))
   try {
-    finishJson(res, 201, await controller.createPluginCategory(request.name))
+    finishJson(res, 201, await controller.createHarness(request.name, request.engine))
   } catch (cause) {
-    reportError('create plugin category', cause)
-    finishJson(res, 409, error('plugin category could not be created'))
+    reportError('create harness', cause)
+    finishJson(res, 409, error('harness could not be created'))
   }
 }
 
-/** Assign one Loader entry to a management category. */
-export async function handleDesktopPluginCategoryAssignRequest(
+/** Assign one Loader entry to a harness or the common group. */
+export async function handleDesktopHarnessAssignRequest(
   req: IncomingMessage,
   res: ServerResponse,
   expectedOrigin: string,
@@ -483,18 +492,18 @@ export async function handleDesktopPluginCategoryAssignRequest(
   }
   const value = await parsePostBody(req, res)
   if (value === INVALID_BODY) return
-  const request = parsePluginCategoryAssignRequest(value)
-  if (request === undefined) return finishJson(res, 400, error('invalid plugin category assignment request'))
+  const request = parseHarnessAssignRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid harness assignment request'))
   try {
-    finishJson(res, 200, await controller.assignPluginCategory(request.entryId, request.categoryId))
+    finishJson(res, 200, await controller.assignHarness(request.entryId, request.harnessId))
   } catch (cause) {
-    reportError('assign plugin category', cause)
-    finishJson(res, 409, error('plugin category assignment could not be changed'))
+    reportError('assign harness', cause)
+    finishJson(res, 409, error('harness assignment could not be changed'))
   }
 }
 
-/** Delete one custom category and restore default assignments. */
-export async function handleDesktopPluginCategoryDeleteRequest(
+/** Delete one custom harness and restore default assignments. */
+export async function handleDesktopHarnessDeleteRequest(
   req: IncomingMessage,
   res: ServerResponse,
   expectedOrigin: string,
@@ -507,13 +516,13 @@ export async function handleDesktopPluginCategoryDeleteRequest(
   }
   const value = await parsePostBody(req, res)
   if (value === INVALID_BODY) return
-  const request = parsePluginCategoryDeleteRequest(value)
-  if (request === undefined) return finishJson(res, 400, error('invalid plugin category deletion request'))
+  const request = parseHarnessDeleteRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid harness deletion request'))
   try {
-    finishJson(res, 200, await controller.deletePluginCategory(request.categoryId))
+    finishJson(res, 200, await controller.deleteHarness(request.harnessId))
   } catch (cause) {
-    reportError('delete plugin category', cause)
-    finishJson(res, 409, error('plugin category could not be deleted'))
+    reportError('delete harness', cause)
+    finishJson(res, 409, error('harness could not be deleted'))
   }
 }
 

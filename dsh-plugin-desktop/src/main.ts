@@ -820,6 +820,7 @@ async function start(): Promise<void> {
         pluginEntries = new DesktopPluginEntriesService({
           profileDir: prepared.profile.dir,
           loader: hostCtx.loader,
+          primaryHarness: prepared.harness,
         })
         if (logSink !== undefined) {
           fileExporter = new FileExporter(logSink)

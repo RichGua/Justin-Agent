@@ -7,10 +7,10 @@ import DesktopSettingsController, {
 } from '../src/desktop-settings-controller.ts'
 import {
   handleDesktopDiagnosticsExportRequest,
+  handleDesktopHarnessAssignRequest,
+  handleDesktopHarnessCreateRequest,
+  handleDesktopHarnessDeleteRequest,
   handleDesktopMarketSelectRequest,
-  handleDesktopPluginCategoryAssignRequest,
-  handleDesktopPluginCategoryCreateRequest,
-  handleDesktopPluginCategoryDeleteRequest,
   handleDesktopPluginEntryToggleRequest,
   handleDesktopPluginsRequest,
   handleDesktopPluginRestartRequest,
@@ -331,10 +331,8 @@ describe('desktop settings controller', () => {
     expect(controller.readPlugins()).toEqual({
       bundles: [{ bundleId, packageName: '@deepseek-ai/dsh-subagent-codex', status: 'active', mutable: true }],
       entries: [],
-      categories: [
-        { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
-        { id: 'codex', name: 'Codex Harness', builtIn: true },
-      ],
+      harnesses: [],
+      primaryHarness: 'deepseek',
       restartRequired: false,
     })
     await expect(controller.setPluginEnabled(bundleId, false)).resolves.toMatchObject({
@@ -356,49 +354,51 @@ describe('desktop settings controller', () => {
     expect(controller.restartPlugins().afterResponse).toBeUndefined()
   })
 
-  it('manages actual Loader entries and categories independently of direct bundles', async () => {
+  it('manages actual Loader entries and harnesses independently of direct bundles', async () => {
     let enabled = true
-    let categoryId = 'deepseek'
-    const categories = [
-      { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
-      { id: 'codex', name: 'Codex Harness', builtIn: true },
+    let harnessId: 'deepseek' | 'codex' = 'deepseek'
+    const harnesses = [
+      { id: 'deepseek' as const, name: 'DeepSeek Harness', builtIn: true, engine: 'agent-loop', selectable: true },
+      { id: 'codex' as const, name: 'Codex Harness', builtIn: true, engine: 'codex-harness', selectable: true },
+      { id: 'common' as const, name: 'Common Plugins', builtIn: true, selectable: false },
     ]
     const pluginEntries = {
       snapshot: () => ({
-        entries: [{ entryId: 'tool', moduleName: '@deepseek-ai/dsh-tool', enabled, runtimeEnabled: true, categoryId }],
-        categories,
+        entries: [{ entryId: 'tool', moduleName: '@deepseek-ai/dsh-tool', enabled, runtimeEnabled: true, harnessId, engine: false, locked: false }],
+        harnesses,
+        primaryHarness: 'deepseek' as const,
         restartRequired: enabled !== true,
       }),
       setEnabled: vi.fn(async (_entryId: string, next: boolean) => { enabled = next }),
-      createCategory: vi.fn(async () => 'custom'),
-      assignCategory: vi.fn(async (_entryId: string, next: string) => { categoryId = next }),
-      deleteCategory: vi.fn(async () => {}),
+      createHarness: vi.fn(async () => 'custom' as `custom_${string}`),
+      assignHarness: vi.fn(async (_entryId: string, next: string) => { harnessId = next as 'deepseek' | 'codex' }),
+      deleteHarness: vi.fn(async () => {}),
     }
     const controller = new DesktopSettingsController(bootstrap({ pluginEntries }))
 
     await expect(controller.setPluginEntryEnabled('tool', false)).resolves.toMatchObject({
       accepted: true,
-      entries: [{ entryId: 'tool', enabled: false, categoryId: 'deepseek' }],
+      entries: [{ entryId: 'tool', enabled: false, harnessId: 'deepseek' }],
       restartRequired: true,
     })
-    await controller.createPluginCategory('Tools')
-    await controller.assignPluginCategory('tool', 'codex')
-    await controller.deletePluginCategory(`custom_${'a'.repeat(32)}`)
+    await controller.createHarness('Tools')
+    await controller.assignHarness('tool', 'codex')
+    await controller.deleteHarness(`custom_${'a'.repeat(32)}`)
     expect(pluginEntries.setEnabled).toHaveBeenCalledWith('tool', false)
-    expect(pluginEntries.createCategory).toHaveBeenCalledWith('Tools')
-    expect(pluginEntries.assignCategory).toHaveBeenCalledWith('tool', 'codex')
-    expect(pluginEntries.deleteCategory).toHaveBeenCalledOnce()
+    expect(pluginEntries.createHarness).toHaveBeenCalledWith('Tools', undefined)
+    expect(pluginEntries.assignHarness).toHaveBeenCalledWith('tool', 'codex')
+    expect(pluginEntries.deleteHarness).toHaveBeenCalledOnce()
   })
 })
 
 describe('desktop settings HTTP boundary', () => {
-  it('strictly routes Loader switches and user category mutations', async () => {
+  it('strictly routes Loader switches and user harness mutations', async () => {
     const pluginEntries = {
-      snapshot: () => ({ entries: [], categories: [], restartRequired: false }),
+      snapshot: () => ({ entries: [], harnesses: [], primaryHarness: 'deepseek' as const, restartRequired: false }),
       setEnabled: vi.fn(async () => {}),
-      createCategory: vi.fn(async () => 'custom'),
-      assignCategory: vi.fn(async () => {}),
-      deleteCategory: vi.fn(async () => {}),
+      createHarness: vi.fn(async () => 'custom' as `custom_${string}`),
+      assignHarness: vi.fn(async () => {}),
+      deleteHarness: vi.fn(async () => {}),
     }
     const controller = new DesktopSettingsController(bootstrap({ pluginEntries }))
     const toggleResponse = response()
@@ -412,22 +412,22 @@ describe('desktop settings HTTP boundary', () => {
     expect(pluginEntries.setEnabled).toHaveBeenCalledWith('agent-loop', false)
 
     const createResponse = response()
-    await handleDesktopPluginCategoryCreateRequest(jsonRequest({ name: 'Tools' }), createResponse, ORIGIN, controller)
+    await handleDesktopHarnessCreateRequest(jsonRequest({ name: 'Tools' }), createResponse, ORIGIN, controller)
     expect(createResponse.statusCode).toBe(201)
-    expect(pluginEntries.createCategory).toHaveBeenCalledWith('Tools')
+    expect(pluginEntries.createHarness).toHaveBeenCalledWith('Tools', undefined)
 
-    const categoryId = `custom_${'a'.repeat(32)}`
+    const harnessId = `custom_${'a'.repeat(32)}`
     const assignResponse = response()
-    await handleDesktopPluginCategoryAssignRequest(
-      jsonRequest({ entryId: 'agent-loop', categoryId }), assignResponse, ORIGIN, controller,
+    await handleDesktopHarnessAssignRequest(
+      jsonRequest({ entryId: 'agent-loop', harnessId }), assignResponse, ORIGIN, controller,
     )
     expect(assignResponse.statusCode).toBe(200)
-    expect(pluginEntries.assignCategory).toHaveBeenCalledWith('agent-loop', categoryId)
+    expect(pluginEntries.assignHarness).toHaveBeenCalledWith('agent-loop', harnessId)
 
     const deleteResponse = response()
-    await handleDesktopPluginCategoryDeleteRequest(jsonRequest({ categoryId }), deleteResponse, ORIGIN, controller)
+    await handleDesktopHarnessDeleteRequest(jsonRequest({ harnessId }), deleteResponse, ORIGIN, controller)
     expect(deleteResponse.statusCode).toBe(200)
-    expect(pluginEntries.deleteCategory).toHaveBeenCalledWith(categoryId)
+    expect(pluginEntries.deleteHarness).toHaveBeenCalledWith(harnessId)
   })
 
   it('serves GET state with no-store headers and supports browser GET fetch metadata', async () => {

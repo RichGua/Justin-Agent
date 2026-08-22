@@ -32,9 +32,9 @@ export interface DesktopSettingsControllerBootstrap {
     & Partial<Pick<DesktopProfiles, 'canDelete' | 'delete'>>
   /** Direct Profile bundle state and its restart-safe mutation capability. */
   readonly plugins: Pick<DesktopPlugins, 'list' | 'previewDisable' | 'executeDisable' | 'previewEnable' | 'executeEnable'>
-  /** Effective Cordis Loader entries and Profile-local category metadata. */
+  /** Effective Cordis Loader entries and Profile-local harness metadata. */
   readonly pluginEntries?: Pick<DesktopPluginEntriesService,
-    'snapshot' | 'setEnabled' | 'createCategory' | 'assignCategory' | 'deleteCategory'>
+    'snapshot' | 'setEnabled' | 'createHarness' | 'assignHarness' | 'deleteHarness'>
   /** Persist one already-validated profile as pending without restarting. */
   persistProfileSelection(name: string): void | Promise<void>
   /** Read the latest persisted request and the startup-effective provider. */
@@ -115,24 +115,30 @@ export class DesktopSettingsController {
       entryId: entry.entryId,
       moduleName: entry.moduleName,
       enabled: entry.enabled,
-      categoryId: entry.categoryId,
+      harnessId: entry.harnessId,
+      engine: entry.engine,
+      locked: entry.locked,
     })) ?? []
-    const categories = pluginEntries?.categories ?? [
-      Object.freeze({ id: 'deepseek', name: 'DeepSeek Harness', builtIn: true }),
-      Object.freeze({ id: 'codex', name: 'Codex Harness', builtIn: true }),
-    ]
+    const harnesses = pluginEntries?.harnesses.map(harness => Object.freeze({
+      id: harness.id,
+      name: harness.name,
+      builtIn: harness.builtIn,
+      ...(harness.engine === undefined ? {} : { engine: harness.engine }),
+      selectable: harness.selectable,
+    })) ?? []
     const restartRequired = bundles.some(bundle =>
       this.pluginBaseline.get(bundle.packageName) !== bundle.status)
       || (pluginEntries?.restartRequired ?? false)
     return Object.freeze({
       bundles: Object.freeze(bundles),
       entries: Object.freeze(entries),
-      categories: Object.freeze(categories),
+      harnesses: Object.freeze(harnesses),
+      primaryHarness: pluginEntries?.primaryHarness ?? 'deepseek',
       restartRequired,
     })
   }
 
-  /** Persist one real Loader entry switch, including primary-Harness exclusivity. */
+  /** Persist one real Loader entry switch, excluding locked harness engines. */
   async setPluginEntryEnabled(entryId: string, enabled: boolean): Promise<DesktopPluginToggleResponse> {
     if (this.bootstrap.pluginEntries === undefined) {
       throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
@@ -141,30 +147,30 @@ export class DesktopSettingsController {
     return Object.freeze({ accepted: true, ...this.readPlugins() })
   }
 
-  /** Create one management-only category. */
-  async createPluginCategory(name: string): Promise<DesktopPluginToggleResponse> {
+  /** Create one user harness, optionally owning one AgentFactory Loader row. */
+  async createHarness(name: string, engine?: string): Promise<DesktopPluginToggleResponse> {
     if (this.bootstrap.pluginEntries === undefined) {
       throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
     }
-    await this.bootstrap.pluginEntries.createCategory(name)
+    await this.bootstrap.pluginEntries.createHarness(name, engine)
     return Object.freeze({ accepted: true, ...this.readPlugins() })
   }
 
-  /** Move one entry without changing its Loader state. */
-  async assignPluginCategory(entryId: string, categoryId: string): Promise<DesktopPluginToggleResponse> {
+  /** Move one entry into a harness or the common group without changing its Loader state. */
+  async assignHarness(entryId: string, harnessId: string): Promise<DesktopPluginToggleResponse> {
     if (this.bootstrap.pluginEntries === undefined) {
       throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
     }
-    await this.bootstrap.pluginEntries.assignCategory(entryId, categoryId)
+    await this.bootstrap.pluginEntries.assignHarness(entryId, harnessId)
     return Object.freeze({ accepted: true, ...this.readPlugins() })
   }
 
-  /** Delete only a user-created category. */
-  async deletePluginCategory(categoryId: string): Promise<DesktopPluginToggleResponse> {
+  /** Delete only a user-created harness and release its entries to common. */
+  async deleteHarness(harnessId: string): Promise<DesktopPluginToggleResponse> {
     if (this.bootstrap.pluginEntries === undefined) {
       throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
     }
-    await this.bootstrap.pluginEntries.deleteCategory(categoryId)
+    await this.bootstrap.pluginEntries.deleteHarness(harnessId)
     return Object.freeze({ accepted: true, ...this.readPlugins() })
   }
 

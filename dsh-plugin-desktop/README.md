@@ -12,12 +12,13 @@ Desktop separates agent runtimes from ordinary DSH plugins. The base Profile
 keeps the upstream **DeepSeek Harness** checkout and its core Loader graph
 unchanged. Primary agent runtimes are a separate selection plane: DeepSeek is
 the default, while **Codex Harness** is a dedicated adapter backed by the
-official `@openai/codex-sdk`; future runtimes such as Claude follow the same
-adapter contract. `@deepseek-ai/dsh-subagent-codex` is a one-shot delegation
-plugin inside DeepSeek Harness and must never be presented as Codex Harness.
-Providers use the stable IDs `deepseek`, `codex`, and `claude` and are
-alternatives in the `primary-agent` group. Ordinary plugins remain independently
-manageable and are grouped only to make a large inventory understandable.
+official `@openai/codex-sdk`. `@deepseek-ai/dsh-subagent-codex` is a one-shot
+delegation plugin inside DeepSeek Harness and must never be presented as Codex
+Harness. The built-in harnesses use the stable IDs `deepseek` and `codex`;
+extra harnesses are created from the plugin panel, each owning one AgentFactory
+Loader row and a plugin set that loads when that harness becomes primary. Every
+Loader entry belongs to one harness or to the `common` group, which is never
+affected by harness switches.
 
 The Electron executable is minimal bootstrap code. It acquires the single-instance lock, resolves the selected DSH profile, provides the native runtime capability, and boots the Host Cordis root in the Electron main process. The `desktop-shell` Host plugin owns the `BrowserWindow`, navigation policy, settings namespace, and close-versus-quit lifecycle through Cordis effects. The native runtime owns the physical tray, while `desktop-shell`, `desktop-profiles`, `desktop-terminal`, and `desktop-updates` contribute effect-scoped commands through its ordered item registry.
 

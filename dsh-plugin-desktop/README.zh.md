@@ -10,11 +10,12 @@
 
 Desktop 会把 Agent 运行时与普通 DSH 插件分开管理。基础 Profile 始终保留未经修改的
 **DeepSeek Harness** checkout 及其核心 Loader 图。主 Agent 运行时属于另一层选择：
-DeepSeek 是默认实现；**Codex Harness** 必须是基于官方 `@openai/codex-sdk` 的独立适配器；
-以后接入 Claude 或其他 Harness 时沿用同一适配器约定。
+DeepSeek 是默认实现；**Codex Harness** 是基于官方 `@openai/codex-sdk` 的独立适配器。
 `@deepseek-ai/dsh-subagent-codex` 只是 DeepSeek Harness 内部的一次性委托插件，不能作为
-Codex Harness 展示。提供方使用稳定 ID `deepseek`、`codex` 和 `claude`，并在
-`primary-agent` 组内互斥。普通插件仍可独立管理，分类只负责让大规模插件清单易于理解。
+Codex Harness 展示。内置 harness 使用稳定 ID `deepseek` 与 `codex`；更多 harness 可从
+插件面板创建，每套 harness 拥有一个 AgentFactory Loader 行，并在其成为主 harness 时
+联动加载该组插件。每个 Loader 条目都属于某套 harness 或 `common` 通用组，通用组
+不受 harness 切换影响。
 
 Electron 可执行文件只包含最小启动代码。它获取单实例锁、解析当前选中的 DSH profile、提供原生运行时能力，并在 Electron main 进程中启动 Host Cordis 根。`desktop-shell` Host 插件通过 Cordis effect 拥有 `BrowserWindow`、导航策略、settings namespace，以及关闭与退出生命周期。原生 runtime 拥有实体托盘；`desktop-shell`、`desktop-profiles`、`desktop-terminal` 与 `desktop-updates` 则通过有序 item registry 提供 effect-scoped 命令。
 

@@ -8,9 +8,9 @@ const MARKET_SELECT_PATH = '/api/desktop/market/select'
 const PLUGINS_PATH = '/api/desktop/plugins'
 const PLUGIN_TOGGLE_PATH = '/api/desktop/plugins/toggle'
 const PLUGIN_ENTRY_TOGGLE_PATH = '/api/desktop/plugin-entries/toggle'
-const PLUGIN_CATEGORY_CREATE_PATH = '/api/desktop/plugin-categories/create'
-const PLUGIN_CATEGORY_ASSIGN_PATH = '/api/desktop/plugin-categories/assign'
-const PLUGIN_CATEGORY_DELETE_PATH = '/api/desktop/plugin-categories/delete'
+const HARNESS_CREATE_PATH = '/api/desktop/harnesses/create'
+const HARNESS_ASSIGN_PATH = '/api/desktop/harnesses/assign'
+const HARNESS_DELETE_PATH = '/api/desktop/harnesses/delete'
 const PLUGIN_RESTART_PATH = '/api/desktop/plugins/restart'
 const TERMINAL_OPEN_PATH = '/api/desktop/terminal/open'
 const MAX_PROFILES = 256
@@ -19,9 +19,9 @@ const MAX_PLUGIN_BUNDLES = 1024
 const BUNDLE_ID_PATTERN = /^bundle_[A-Za-z0-9_-]{32}$/u
 const PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9._:@/-]{1,256}$/u
-const CATEGORY_ID_PATTERN = /^(?:deepseek|codex|custom_[a-f0-9]{32})$/u
+const HARNESS_ID_PATTERN = /^(?:deepseek|codex|common|custom_[a-f0-9]{32})$/u
 const MAX_PLUGIN_ENTRIES = 2048
-const MAX_PLUGIN_CATEGORIES = 66
+const MAX_PLUGIN_HARNESSES = 67
 
 /** Launcher-supported plugin market implementations. */
 export type DesktopMarketProvider = 'disabled' | 'community-market' | 'dsh-market'
@@ -61,20 +61,25 @@ export interface DesktopPluginEntryView {
   readonly entryId: string
   readonly moduleName: string
   readonly enabled: boolean
-  readonly categoryId: string
+  readonly harnessId: string
+  readonly engine: boolean
+  readonly locked: boolean
 }
 
-export interface DesktopPluginCategoryView {
+export interface DesktopPluginHarnessView {
   readonly id: string
   readonly name: string
   readonly builtIn: boolean
+  readonly engine?: string
+  readonly selectable: boolean
 }
 
 /** Fresh direct-bundle state plus whether the running generation is stale. */
 export interface DesktopPluginsView {
   readonly bundles: readonly DesktopPluginBundleView[]
   readonly entries: readonly DesktopPluginEntryView[]
-  readonly categories: readonly DesktopPluginCategoryView[]
+  readonly harnesses: readonly DesktopPluginHarnessView[]
+  readonly primaryHarness: string
   readonly restartRequired: boolean
 }
 
@@ -94,9 +99,9 @@ export interface DesktopSettingsApi {
   readPlugins(): Promise<DesktopPluginsView>
   setPluginEnabled(bundleId: string, enabled: boolean): Promise<DesktopPluginsView>
   setPluginEntryEnabled(entryId: string, enabled: boolean): Promise<DesktopPluginsView>
-  createPluginCategory(name: string): Promise<DesktopPluginsView>
-  assignPluginCategory(entryId: string, categoryId: string): Promise<DesktopPluginsView>
-  deletePluginCategory(categoryId: string): Promise<DesktopPluginsView>
+  createHarness(name: string, engine?: string): Promise<DesktopPluginsView>
+  assignHarness(entryId: string, harnessId: string): Promise<DesktopPluginsView>
+  deleteHarness(harnessId: string): Promise<DesktopPluginsView>
   restartPlugins(): Promise<DesktopRestartAcceptance>
   openTerminal(): Promise<void>
 }
@@ -166,8 +171,10 @@ export function parseDesktopPluginsView(value: unknown): DesktopPluginsView {
     || !Array.isArray(value.bundles)
     || value.bundles.length > MAX_PLUGIN_BUNDLES
     || (value.entries !== undefined && (!Array.isArray(value.entries) || value.entries.length > MAX_PLUGIN_ENTRIES))
-    || (value.categories !== undefined && (!Array.isArray(value.categories) || value.categories.length > MAX_PLUGIN_CATEGORIES))
-    || typeof value.restartRequired !== 'boolean') {
+    || (value.harnesses !== undefined && (!Array.isArray(value.harnesses) || value.harnesses.length > MAX_PLUGIN_HARNESSES))
+    || typeof value.restartRequired !== 'boolean'
+    || typeof value.primaryHarness !== 'string'
+    || !HARNESS_ID_PATTERN.test(value.primaryHarness)) {
     throw new Error('dsh-plugin-desktop: invalid Desktop plugins response')
   }
   const bundles = value.bundles.map((raw): DesktopPluginBundleView => {
@@ -201,42 +208,57 @@ export function parseDesktopPluginsView(value: unknown): DesktopPluginsView {
       || raw.moduleName.length === 0
       || raw.moduleName.length > 512
       || typeof raw.enabled !== 'boolean'
-      || typeof raw.categoryId !== 'string'
-      || !CATEGORY_ID_PATTERN.test(raw.categoryId)) {
+      || typeof raw.harnessId !== 'string'
+      || !HARNESS_ID_PATTERN.test(raw.harnessId)
+      || typeof raw.engine !== 'boolean'
+      || typeof raw.locked !== 'boolean') {
       throw new Error('dsh-plugin-desktop: invalid Desktop plugin entry response')
     }
     return Object.freeze({
       entryId: raw.entryId,
       moduleName: raw.moduleName,
       enabled: raw.enabled,
-      categoryId: raw.categoryId,
+      harnessId: raw.harnessId,
+      engine: raw.engine,
+      locked: raw.locked,
     })
   })
-  const rawCategories = value.categories ?? [
-    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
-    { id: 'codex', name: 'Codex Harness', builtIn: true },
+  const rawHarnesses = value.harnesses ?? [
+    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true, engine: 'agent-loop', selectable: true },
+    { id: 'codex', name: 'Codex Harness', builtIn: true, engine: 'codex-harness', selectable: true },
+    { id: 'common', name: 'Common Plugins', builtIn: true, selectable: false },
   ]
-  const categories = (rawCategories as unknown[]).map((raw): DesktopPluginCategoryView => {
+  const harnesses = (rawHarnesses as unknown[]).map((raw): DesktopPluginHarnessView => {
     if (!isObject(raw)
       || typeof raw.id !== 'string'
-      || !CATEGORY_ID_PATTERN.test(raw.id)
+      || !HARNESS_ID_PATTERN.test(raw.id)
       || typeof raw.name !== 'string'
       || raw.name.trim().length === 0
       || raw.name.length > 64
-      || typeof raw.builtIn !== 'boolean') {
-      throw new Error('dsh-plugin-desktop: invalid Desktop plugin category response')
+      || typeof raw.builtIn !== 'boolean'
+      || (raw.engine !== undefined
+        && (typeof raw.engine !== 'string' || !ENTRY_ID_PATTERN.test(raw.engine)))
+      || typeof raw.selectable !== 'boolean') {
+      throw new Error('dsh-plugin-desktop: invalid Desktop plugin harness response')
     }
-    return Object.freeze({ id: raw.id, name: raw.name, builtIn: raw.builtIn })
+    return Object.freeze({
+      id: raw.id,
+      name: raw.name,
+      builtIn: raw.builtIn,
+      ...(raw.engine === undefined ? {} : { engine: raw.engine }),
+      selectable: raw.selectable,
+    })
   })
   if (new Set(entries.map(entry => entry.entryId)).size !== entries.length
-    || new Set(categories.map(category => category.id)).size !== categories.length
-    || entries.some(entry => !categories.some(category => category.id === entry.categoryId))) {
-    throw new Error('dsh-plugin-desktop: duplicate or missing Desktop plugin category')
+    || new Set(harnesses.map(harness => harness.id)).size !== harnesses.length
+    || entries.some(entry => !harnesses.some(harness => harness.id === entry.harnessId))) {
+    throw new Error('dsh-plugin-desktop: duplicate or missing Desktop plugin harness')
   }
   return Object.freeze({
     bundles: Object.freeze(bundles),
     entries: Object.freeze(entries),
-    categories: Object.freeze(categories),
+    harnesses: Object.freeze(harnesses),
+    primaryHarness: value.primaryHarness,
     restartRequired: value.restartRequired,
   })
 }
@@ -331,24 +353,24 @@ export function createDesktopSettingsApi(fetcher: FetchLike = globalThis.fetch.b
       }
       return parseDesktopPluginsView(value)
     },
-    async createPluginCategory(name: string) {
-      const value = await readResponse(await post(fetcher, PLUGIN_CATEGORY_CREATE_PATH, { name }))
+    async createHarness(name: string, engine?: string) {
+      const value = await readResponse(await post(fetcher, HARNESS_CREATE_PATH, { name, ...(engine === undefined ? {} : { engine }) }))
       if (!isObject(value) || value.accepted !== true) {
-        throw new Error('dsh-plugin-desktop: invalid Desktop plugin category response')
+        throw new Error('dsh-plugin-desktop: invalid Desktop harness response')
       }
       return parseDesktopPluginsView(value)
     },
-    async assignPluginCategory(entryId: string, categoryId: string) {
-      const value = await readResponse(await post(fetcher, PLUGIN_CATEGORY_ASSIGN_PATH, { entryId, categoryId }))
+    async assignHarness(entryId: string, harnessId: string) {
+      const value = await readResponse(await post(fetcher, HARNESS_ASSIGN_PATH, { entryId, harnessId }))
       if (!isObject(value) || value.accepted !== true) {
-        throw new Error('dsh-plugin-desktop: invalid Desktop plugin category response')
+        throw new Error('dsh-plugin-desktop: invalid Desktop harness response')
       }
       return parseDesktopPluginsView(value)
     },
-    async deletePluginCategory(categoryId: string) {
-      const value = await readResponse(await post(fetcher, PLUGIN_CATEGORY_DELETE_PATH, { categoryId }))
+    async deleteHarness(harnessId: string) {
+      const value = await readResponse(await post(fetcher, HARNESS_DELETE_PATH, { harnessId }))
       if (!isObject(value) || value.accepted !== true) {
-        throw new Error('dsh-plugin-desktop: invalid Desktop plugin category response')
+        throw new Error('dsh-plugin-desktop: invalid Desktop harness response')
       }
       return parseDesktopPluginsView(value)
     },
@@ -370,9 +392,9 @@ export const desktopSettingsPaths = Object.freeze({
   plugins: PLUGINS_PATH,
   pluginToggle: PLUGIN_TOGGLE_PATH,
   pluginEntryToggle: PLUGIN_ENTRY_TOGGLE_PATH,
-  pluginCategoryCreate: PLUGIN_CATEGORY_CREATE_PATH,
-  pluginCategoryAssign: PLUGIN_CATEGORY_ASSIGN_PATH,
-  pluginCategoryDelete: PLUGIN_CATEGORY_DELETE_PATH,
+  harnessCreate: HARNESS_CREATE_PATH,
+  harnessAssign: HARNESS_ASSIGN_PATH,
+  harnessDelete: HARNESS_DELETE_PATH,
   pluginRestart: PLUGIN_RESTART_PATH,
   terminalOpen: TERMINAL_OPEN_PATH,
 })
