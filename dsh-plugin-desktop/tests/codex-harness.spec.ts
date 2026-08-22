@@ -223,6 +223,44 @@ describe('Codex Harness AgentFactory', () => {
     await test.ctx.fiber.dispose()
   })
 
+  it('survives recoverable transport errors and completes when the turn finishes', async () => {
+    const codex = new FakeCodex()
+    vi.spyOn(codex, 'startThread').mockImplementation((options) => {
+      codex.started.push(options ?? {})
+      const thread = new FakeThread([
+        { type: 'thread.started', thread_id: 'transport-thread' },
+        { type: 'turn.started' },
+        { type: 'error', message: 'Reconnecting... 2/5 (unexpected status 405, url: wss://api.deepseek.com/responses)' },
+        { type: 'error', message: 'Reconnecting... 5/5 (unexpected status 405, url: wss://api.deepseek.com/responses)' },
+        { type: 'item.completed', item: { id: 'ans-1', type: 'agent_message', text: 'done after fallback' } },
+        {
+          type: 'turn.completed',
+          usage: {
+            input_tokens: 2,
+            cached_input_tokens: 0,
+            cache_write_input_tokens: 0,
+            output_tokens: 1,
+            reasoning_output_tokens: 0,
+          },
+        },
+      ])
+      codex.threads.push(thread)
+      return thread
+    })
+    const test = await harness(codex)
+    const handle = await test.ctx.agents.create({ sessionId: SessionId('codex-session-transport') })
+
+    handle.agent.followup(prompt('survive the reconnect'))
+    await handle.agent.whenIdle()
+
+    expect(handle.agent.session.events.findLast(event => event.type === 'turn/end')?.data.reason)
+      .toEqual({ kind: 'completed' })
+
+    await handle.dispose()
+    await test.factory.dispose()
+    await test.ctx.fiber.dispose()
+  })
+
   it('accepts an independent endpoint and resolves its key through the credentials seam', async () => {
     const ctx = new Context()
     const resolve = vi.fn(async () => ({ value: 'sk-independent', source: 'env' }))
@@ -258,6 +296,24 @@ describe('Codex Harness AgentFactory', () => {
 
     await new Promise(resolveImmediate => setImmediate(resolveImmediate))
     // The base DeepSeek key reference is resolved automatically, no explicit apiKeyRef needed.
+    expect(resolve).toHaveBeenCalledOnce()
+    await factory.dispose()
+    await ctx.fiber.dispose()
+  })
+
+  it('follows the deepseek-official base route and reads the base provider settings', async () => {
+    const ctx = new Context()
+    const resolve = vi.fn(async () => ({ value: 'sk-official', source: 'env' }))
+    ctx.provide('credentials', { resolve } as never)
+    ctx.provide('settings', {
+      get: vi.fn(() => ({ baseURL: 'https://api.deepseek.com', apiKeyEnv: 'DEEPSEEK_API_KEY' })),
+    } as never)
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high' }),
+    } as never)
+    const factory = new CodexHarnessFactory(ctx, Config({}))
+
+    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
     expect(resolve).toHaveBeenCalledOnce()
     await factory.dispose()
     await ctx.fiber.dispose()

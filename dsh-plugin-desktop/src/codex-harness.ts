@@ -42,6 +42,8 @@ import {
   type TokenUsage,
 } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   SessionPreparation,
   type AgentCancelCause,
@@ -88,6 +90,10 @@ const CODEX_REPLAY_VERSION = 1
 const DEEPSEEK_API_BASE = 'https://api.deepseek.com'
 /** Default credential reference of the DSH base DeepSeek provider. */
 const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY'
+/** Provider routes owned by the DSH base DeepSeek adapter. */
+const DEEPSEEK_PROVIDER_IDS = new Set(['deepseek', 'deepseek-official'])
+/** Settings namespace of the DSH base DeepSeek provider plugin. */
+const DEEPSEEK_SETTINGS_NAMESPACE = 'llm-deepseek'
 
 /** Reasoning-effort ids the Codex CLI accepts; a base model id outside this set is ignored. */
 const CODEX_REASONING_EFFORTS = new Set<string>(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
@@ -565,6 +571,7 @@ export class CodexHarnessAgent implements Agent {
     const chunkSeqs: number[] = []
     let usage: TokenUsage | undefined
     let completed = false
+    let transportError: string | undefined
     const appendChunk = (chunk: StreamChunk): void => {
       chunkSeqs.push(this.session.append('assistant/chunk', { turn, step, chunk }).seq)
     }
@@ -623,10 +630,14 @@ export class CodexHarnessAgent implements Agent {
         } else if (event.type === 'turn.failed') {
           throw new Error(event.error.message)
         } else if (event.type === 'error') {
-          throw new Error(event.message)
+          // The CLI emits recoverable transport errors (for example WebSocket
+          // handshake failures that fall back to HTTPS) without ending the
+          // stream; only turn.failed is terminal. Keep the last message for a
+          // clearer failure when the stream truly ends without a completed turn.
+          transportError = event.message
         }
       }
-      if (!completed) throw new Error('Codex event stream ended without turn.completed')
+      if (!completed) throw new Error(transportError ?? 'Codex event stream ended without turn.completed')
     } catch (error: unknown) {
       for (const block of blocks) {
         if (!block.ended) {
@@ -726,10 +737,23 @@ export class CodexHarnessFactory implements AgentFactory {
     this.codexPromise = codex === undefined ? this.buildCodex(ctx, config) : Promise.resolve(codex)
   }
 
+  /** Read the base DeepSeek provider's settings section (endpoint and key reference). */
+  private readBaseDeepSeekSettings(ctx: Context): { baseURL?: string; apiKeyEnv?: string } | undefined {
+    const settings = ctx.get('settings')
+    if (settings === undefined) return undefined
+    const value = settings.get(settingsNamespace(DEEPSEEK_SETTINGS_NAMESPACE))
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+    return value as { baseURL?: string; apiKeyEnv?: string }
+  }
+
   /** Construct the official SDK client, resolving the endpoint key per factory. */
   private async buildCodex(ctx: Context, config: Config): Promise<CodexClientLike> {
     const base = this.baseModel
-    const apiKeyRef = config.apiKeyRef ?? (base?.provider === 'deepseek' ? DEEPSEEK_API_KEY_ENV : undefined)
+    const isDeepSeekBase = base !== undefined && DEEPSEEK_PROVIDER_IDS.has(base.provider)
+    const deepSeekSettings = isDeepSeekBase ? this.readBaseDeepSeekSettings(ctx) : undefined
+    const apiKeyRef = config.apiKeyRef
+      ?? deepSeekSettings?.apiKeyEnv
+      ?? (isDeepSeekBase ? DEEPSEEK_API_KEY_ENV : undefined)
     let apiKey: string | undefined
     if (apiKeyRef !== undefined) {
       const credentials = ctx.get('credentials')
@@ -738,7 +762,9 @@ export class CodexHarnessFactory implements AgentFactory {
         apiKey = resolved?.value
       }
     }
-    const baseUrl = config.baseUrl ?? (base?.provider === 'deepseek' ? DEEPSEEK_API_BASE : undefined)
+    const baseUrl = config.baseUrl
+      ?? deepSeekSettings?.baseURL
+      ?? (isDeepSeekBase ? DEEPSEEK_API_BASE : undefined)
     return new Codex({
       ...(baseUrl === undefined ? {} : { baseUrl }),
       ...(apiKey === undefined ? {} : { apiKey }),
