@@ -3,6 +3,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Input, ThreadEvent, ThreadOptions } from '@openai/codex-sdk'
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CODEX_ENDPOINT_PROVIDER_ID,
@@ -34,6 +35,8 @@ const SUCCESS_EVENTS: readonly ThreadEvent[] = [
     },
   },
 ]
+
+const WORKSPACE = resolve('codex-harness-test-workspace')
 
 class FakeThread implements CodexThreadLike {
   readonly id: string | null = null
@@ -91,7 +94,7 @@ describe('Codex Harness AgentFactory', () => {
     const test = await harness()
     const handle = await test.ctx.agents.create({
       sessionId: SessionId('codex-session-1'),
-      meta: { cwd: 'C:\\workspace' },
+      meta: { cwd: WORKSPACE },
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     })
 
@@ -100,7 +103,7 @@ describe('Codex Harness AgentFactory', () => {
 
     expect(handle.agent.options).toEqual({ provider: 'codex' })
     expect(test.codex.started).toEqual([expect.objectContaining({
-      workingDirectory: 'C:\\workspace',
+      workingDirectory: WORKSPACE,
       sandboxMode: 'workspace-write',
       approvalPolicy: 'on-request',
       skipGitRepoCheck: true,
