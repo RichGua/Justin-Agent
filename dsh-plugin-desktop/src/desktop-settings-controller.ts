@@ -6,6 +6,8 @@ import type {
 } from './desktop-market.ts'
 import type { DesktopProfileSummary } from './profile-manager.ts'
 import type { DesktopProfiles } from './profile-service.ts'
+import type { DesktopPlugins } from './desktop-plugins.ts'
+import type { DesktopPluginEntriesService } from './desktop-plugin-entries.ts'
 import type {
   DesktopMarketSelectResponse,
   DesktopDiagnosticsExportResponse,
@@ -14,6 +16,9 @@ import type {
   DesktopProfileDeleteResponse,
   DesktopProfileRollbackResponse,
   DesktopProfileSelectResponse,
+  DesktopPluginRestartResponse,
+  DesktopPluginsResponse,
+  DesktopPluginToggleResponse,
   DesktopSettingsMarketView,
   DesktopSettingsProfileView,
   DesktopSettingsResponse,
@@ -25,6 +30,11 @@ export interface DesktopSettingsControllerBootstrap {
   /** Generation-scoped profile service. */
   readonly profiles: Pick<DesktopProfiles, 'current' | 'list' | 'create'>
     & Partial<Pick<DesktopProfiles, 'canDelete' | 'delete'>>
+  /** Direct Profile bundle state and its restart-safe mutation capability. */
+  readonly plugins: Pick<DesktopPlugins, 'list' | 'previewDisable' | 'executeDisable' | 'previewEnable' | 'executeEnable'>
+  /** Effective Cordis Loader entries and Profile-local category metadata. */
+  readonly pluginEntries?: Pick<DesktopPluginEntriesService,
+    'snapshot' | 'setEnabled' | 'createCategory' | 'assignCategory' | 'deleteCategory'>
   /** Persist one already-validated profile as pending without restarting. */
   persistProfileSelection(name: string): void | Promise<void>
   /** Read the latest persisted request and the startup-effective provider. */
@@ -83,9 +93,106 @@ function projectMarket(
  */
 export class DesktopSettingsController {
   private readonly effectiveMarket: DesktopMarketProvider
+  private readonly pluginBaseline: ReadonlyMap<string, 'active' | 'disabled'>
 
   constructor(private readonly bootstrap: DesktopSettingsControllerBootstrap) {
     this.effectiveMarket = bootstrap.readMarket().effective
+    this.pluginBaseline = new Map(
+      bootstrap.plugins.list().map(bundle => [bundle.packageName, bundle.status]),
+    )
+  }
+
+  /** Read a fresh renderer-safe direct-bundle projection. */
+  readPlugins(): DesktopPluginsResponse {
+    const bundles = this.bootstrap.plugins.list().map(bundle => Object.freeze({
+      bundleId: bundle.bundleId,
+      packageName: bundle.packageName,
+      status: bundle.status,
+      mutable: bundle.mutable,
+    }))
+    const pluginEntries = this.bootstrap.pluginEntries?.snapshot()
+    const entries = pluginEntries?.entries.map(entry => Object.freeze({
+      entryId: entry.entryId,
+      moduleName: entry.moduleName,
+      enabled: entry.enabled,
+      categoryId: entry.categoryId,
+    })) ?? []
+    const categories = pluginEntries?.categories ?? [
+      Object.freeze({ id: 'deepseek', name: 'DeepSeek Harness', builtIn: true }),
+      Object.freeze({ id: 'codex', name: 'Codex Harness', builtIn: true }),
+    ]
+    const restartRequired = bundles.some(bundle =>
+      this.pluginBaseline.get(bundle.packageName) !== bundle.status)
+      || (pluginEntries?.restartRequired ?? false)
+    return Object.freeze({
+      bundles: Object.freeze(bundles),
+      entries: Object.freeze(entries),
+      categories: Object.freeze(categories),
+      restartRequired,
+    })
+  }
+
+  /** Persist one real Loader entry switch, including primary-Harness exclusivity. */
+  async setPluginEntryEnabled(entryId: string, enabled: boolean): Promise<DesktopPluginToggleResponse> {
+    if (this.bootstrap.pluginEntries === undefined) {
+      throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
+    }
+    await this.bootstrap.pluginEntries.setEnabled(entryId, enabled)
+    return Object.freeze({ accepted: true, ...this.readPlugins() })
+  }
+
+  /** Create one management-only category. */
+  async createPluginCategory(name: string): Promise<DesktopPluginToggleResponse> {
+    if (this.bootstrap.pluginEntries === undefined) {
+      throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
+    }
+    await this.bootstrap.pluginEntries.createCategory(name)
+    return Object.freeze({ accepted: true, ...this.readPlugins() })
+  }
+
+  /** Move one entry without changing its Loader state. */
+  async assignPluginCategory(entryId: string, categoryId: string): Promise<DesktopPluginToggleResponse> {
+    if (this.bootstrap.pluginEntries === undefined) {
+      throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
+    }
+    await this.bootstrap.pluginEntries.assignCategory(entryId, categoryId)
+    return Object.freeze({ accepted: true, ...this.readPlugins() })
+  }
+
+  /** Delete only a user-created category. */
+  async deletePluginCategory(categoryId: string): Promise<DesktopPluginToggleResponse> {
+    if (this.bootstrap.pluginEntries === undefined) {
+      throw new Error('dsh-plugin-desktop: Loader plugin management is unavailable')
+    }
+    await this.bootstrap.pluginEntries.deleteCategory(categoryId)
+    return Object.freeze({ accepted: true, ...this.readPlugins() })
+  }
+
+  /** Persist one reversible bundle toggle after revalidating its opaque target. */
+  async setPluginEnabled(bundleId: string, enabled: boolean): Promise<DesktopPluginToggleResponse> {
+    const target = this.bootstrap.plugins.list().find(bundle => bundle.bundleId === bundleId)
+    if (target === undefined) throw new Error('dsh-plugin-desktop: plugin target is unavailable')
+    if (!target.mutable) throw new Error('dsh-plugin-desktop: plugin target is immutable')
+    const wanted = enabled ? 'active' : 'disabled'
+    if (target.status !== wanted) {
+      if (enabled) {
+        const preview = this.bootstrap.plugins.previewEnable(bundleId)
+        await this.bootstrap.plugins.executeEnable(preview.previewId)
+      } else {
+        const preview = this.bootstrap.plugins.previewDisable(bundleId)
+        await this.bootstrap.plugins.executeDisable(preview.previewId)
+      }
+    }
+    return Object.freeze({ accepted: true, ...this.readPlugins() })
+  }
+
+  /** Restart only when persisted plugin state differs from this generation. */
+  restartPlugins(): DesktopSettingsPostResponse<DesktopPluginRestartResponse> {
+    const restartRequired = this.readPlugins().restartRequired
+    return Object.freeze({
+      response: Object.freeze({ accepted: true, restartRequired }),
+      ...(restartRequired ? { afterResponse: () => { this.bootstrap.scheduleRestart() } } : {}),
+    })
   }
 
   /** Read a fresh, renderer-safe settings projection. */

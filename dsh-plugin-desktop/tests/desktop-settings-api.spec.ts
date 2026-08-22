@@ -8,6 +8,13 @@ import DesktopSettingsController, {
 import {
   handleDesktopDiagnosticsExportRequest,
   handleDesktopMarketSelectRequest,
+  handleDesktopPluginCategoryAssignRequest,
+  handleDesktopPluginCategoryCreateRequest,
+  handleDesktopPluginCategoryDeleteRequest,
+  handleDesktopPluginEntryToggleRequest,
+  handleDesktopPluginsRequest,
+  handleDesktopPluginRestartRequest,
+  handleDesktopPluginToggleRequest,
   handleDesktopProfileCreateRequest,
   handleDesktopProfileCreateWindowRequest,
   handleDesktopProfileDeleteRequest,
@@ -64,6 +71,13 @@ function bootstrap(
       create: () => WORK,
       canDelete: () => false,
       delete: async () => {},
+    },
+    plugins: {
+      list: () => [],
+      previewDisable: () => { throw new Error('unexpected disable') },
+      executeDisable: async () => { throw new Error('unexpected disable') },
+      previewEnable: () => { throw new Error('unexpected enable') },
+      executeEnable: async () => { throw new Error('unexpected enable') },
     },
     persistProfileSelection: async () => {},
     readMarket: () => market(),
@@ -300,9 +314,122 @@ describe('desktop settings controller', () => {
     expect(openProfileCreator).toHaveBeenCalledOnce()
     expect(prepareProfileRollback).toHaveBeenCalledOnce()
   })
+
+  it('persists reversible plugin toggles and only requests restart while state differs from boot', async () => {
+    const bundleId = `bundle_${'a'.repeat(32)}`
+    let status: 'active' | 'disabled' = 'active'
+    const scheduleRestart = vi.fn()
+    const plugins: DesktopSettingsControllerBootstrap['plugins'] = {
+      list: () => [{ bundleId, packageName: '@deepseek-ai/dsh-subagent-codex', status, mutable: true }],
+      previewDisable: () => ({ previewId: `disable_${'b'.repeat(43)}`, profileName: 'desktop', packageName: '@deepseek-ai/dsh-subagent-codex', expiresAt: new Date().toISOString() }),
+      executeDisable: async () => { status = 'disabled'; return { packageName: '@deepseek-ai/dsh-subagent-codex' } },
+      previewEnable: () => ({ previewId: `enable_${'c'.repeat(43)}`, profileName: 'desktop', packageName: '@deepseek-ai/dsh-subagent-codex', expiresAt: new Date().toISOString() }),
+      executeEnable: async () => { status = 'active'; return { packageName: '@deepseek-ai/dsh-subagent-codex' } },
+    }
+    const controller = new DesktopSettingsController(bootstrap({ plugins, scheduleRestart }))
+
+    expect(controller.readPlugins()).toEqual({
+      bundles: [{ bundleId, packageName: '@deepseek-ai/dsh-subagent-codex', status: 'active', mutable: true }],
+      entries: [],
+      categories: [
+        { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
+        { id: 'codex', name: 'Codex Harness', builtIn: true },
+      ],
+      restartRequired: false,
+    })
+    await expect(controller.setPluginEnabled(bundleId, false)).resolves.toMatchObject({
+      accepted: true,
+      restartRequired: true,
+      bundles: [{ status: 'disabled' }],
+    })
+    const restart = controller.restartPlugins()
+    expect(restart.response).toEqual({ accepted: true, restartRequired: true })
+    expect(scheduleRestart).not.toHaveBeenCalled()
+    restart.afterResponse?.()
+    expect(scheduleRestart).toHaveBeenCalledOnce()
+
+    await expect(controller.setPluginEnabled(bundleId, true)).resolves.toMatchObject({
+      accepted: true,
+      restartRequired: false,
+      bundles: [{ status: 'active' }],
+    })
+    expect(controller.restartPlugins().afterResponse).toBeUndefined()
+  })
+
+  it('manages actual Loader entries and categories independently of direct bundles', async () => {
+    let enabled = true
+    let categoryId = 'deepseek'
+    const categories = [
+      { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
+      { id: 'codex', name: 'Codex Harness', builtIn: true },
+    ]
+    const pluginEntries = {
+      snapshot: () => ({
+        entries: [{ entryId: 'tool', moduleName: '@deepseek-ai/dsh-tool', enabled, runtimeEnabled: true, categoryId }],
+        categories,
+        restartRequired: enabled !== true,
+      }),
+      setEnabled: vi.fn(async (_entryId: string, next: boolean) => { enabled = next }),
+      createCategory: vi.fn(async () => 'custom'),
+      assignCategory: vi.fn(async (_entryId: string, next: string) => { categoryId = next }),
+      deleteCategory: vi.fn(async () => {}),
+    }
+    const controller = new DesktopSettingsController(bootstrap({ pluginEntries }))
+
+    await expect(controller.setPluginEntryEnabled('tool', false)).resolves.toMatchObject({
+      accepted: true,
+      entries: [{ entryId: 'tool', enabled: false, categoryId: 'deepseek' }],
+      restartRequired: true,
+    })
+    await controller.createPluginCategory('Tools')
+    await controller.assignPluginCategory('tool', 'codex')
+    await controller.deletePluginCategory(`custom_${'a'.repeat(32)}`)
+    expect(pluginEntries.setEnabled).toHaveBeenCalledWith('tool', false)
+    expect(pluginEntries.createCategory).toHaveBeenCalledWith('Tools')
+    expect(pluginEntries.assignCategory).toHaveBeenCalledWith('tool', 'codex')
+    expect(pluginEntries.deleteCategory).toHaveBeenCalledOnce()
+  })
 })
 
 describe('desktop settings HTTP boundary', () => {
+  it('strictly routes Loader switches and user category mutations', async () => {
+    const pluginEntries = {
+      snapshot: () => ({ entries: [], categories: [], restartRequired: false }),
+      setEnabled: vi.fn(async () => {}),
+      createCategory: vi.fn(async () => 'custom'),
+      assignCategory: vi.fn(async () => {}),
+      deleteCategory: vi.fn(async () => {}),
+    }
+    const controller = new DesktopSettingsController(bootstrap({ pluginEntries }))
+    const toggleResponse = response()
+    await handleDesktopPluginEntryToggleRequest(
+      jsonRequest({ entryId: 'agent-loop', enabled: false }),
+      toggleResponse,
+      ORIGIN,
+      controller,
+    )
+    expect(toggleResponse.statusCode).toBe(200)
+    expect(pluginEntries.setEnabled).toHaveBeenCalledWith('agent-loop', false)
+
+    const createResponse = response()
+    await handleDesktopPluginCategoryCreateRequest(jsonRequest({ name: 'Tools' }), createResponse, ORIGIN, controller)
+    expect(createResponse.statusCode).toBe(201)
+    expect(pluginEntries.createCategory).toHaveBeenCalledWith('Tools')
+
+    const categoryId = `custom_${'a'.repeat(32)}`
+    const assignResponse = response()
+    await handleDesktopPluginCategoryAssignRequest(
+      jsonRequest({ entryId: 'agent-loop', categoryId }), assignResponse, ORIGIN, controller,
+    )
+    expect(assignResponse.statusCode).toBe(200)
+    expect(pluginEntries.assignCategory).toHaveBeenCalledWith('agent-loop', categoryId)
+
+    const deleteResponse = response()
+    await handleDesktopPluginCategoryDeleteRequest(jsonRequest({ categoryId }), deleteResponse, ORIGIN, controller)
+    expect(deleteResponse.statusCode).toBe(200)
+    expect(pluginEntries.deleteCategory).toHaveBeenCalledWith(categoryId)
+  })
+
   it('serves GET state with no-store headers and supports browser GET fetch metadata', async () => {
     const controller = new DesktopSettingsController(bootstrap())
     const req = request('GET', {
@@ -358,6 +485,47 @@ describe('desktop settings HTTP boundary', () => {
       market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: false },
     })
     expect(create).toHaveBeenCalledWith('work')
+  })
+
+  it('serves and toggles direct plugins through fixed same-origin endpoints', async () => {
+    const bundleId = `bundle_${'d'.repeat(32)}`
+    let status: 'active' | 'disabled' = 'active'
+    const controller = new DesktopSettingsController(bootstrap({
+      plugins: {
+        list: () => [{ bundleId, packageName: '@deepseek-ai/dsh-subagent-codex', status, mutable: true }],
+        previewDisable: () => ({ previewId: `disable_${'e'.repeat(43)}`, profileName: 'desktop', packageName: '@deepseek-ai/dsh-subagent-codex', expiresAt: new Date().toISOString() }),
+        executeDisable: async () => { status = 'disabled'; return { packageName: '@deepseek-ai/dsh-subagent-codex' } },
+        previewEnable: () => { throw new Error('unexpected enable') },
+        executeEnable: async () => { throw new Error('unexpected enable') },
+      },
+    }))
+    const listResponse = response()
+    await handleDesktopPluginsRequest(request('GET'), listResponse, ORIGIN, controller)
+    expect(listResponse.statusCode).toBe(200)
+    expect(JSON.parse(listResponse.body).bundles).toEqual([
+      { bundleId, packageName: '@deepseek-ai/dsh-subagent-codex', status: 'active', mutable: true },
+    ])
+
+    const toggleResponse = response()
+    await handleDesktopPluginToggleRequest(
+      jsonRequest({ bundleId, enabled: false }), toggleResponse, ORIGIN, controller,
+    )
+    expect(toggleResponse.statusCode).toBe(200)
+    expect(JSON.parse(toggleResponse.body)).toMatchObject({
+      accepted: true,
+      restartRequired: true,
+      bundles: [{ status: 'disabled' }],
+    })
+
+    const invalidResponse = response()
+    await handleDesktopPluginToggleRequest(
+      jsonRequest({ bundleId, enabled: false, packageName: 'injected' }), invalidResponse, ORIGIN, controller,
+    )
+    expect(invalidResponse.statusCode).toBe(400)
+
+    const restartResponse = response()
+    await handleDesktopPluginRestartRequest(jsonRequest({}), restartResponse, ORIGIN, controller)
+    expect(restartResponse.statusCode).toBe(202)
   })
 
   it('deletes a profile through the exact mutation endpoint', async () => {

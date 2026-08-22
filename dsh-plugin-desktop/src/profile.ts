@@ -31,6 +31,11 @@ import { findOverlayPackage, resolveOverlayPackage } from './package-overlay.ts'
 import { DESKTOP_DEFAULT_WEB_PORT } from './desktop-port.ts'
 import type { DesktopShellMode } from './runtime.ts'
 import {
+  CODEX_HARNESS_PLUGIN,
+  DEEPSEEK_HARNESS_PLUGIN,
+  type HarnessKind,
+} from './harnesses.ts'
+import {
   activeDesktopProfileLayers,
   desktopPluginBundleMutable,
   readDesktopDisabledBundles,
@@ -41,6 +46,7 @@ import {
   type DesktopMarketProvider,
   type DesktopMarketSnapshot,
 } from './desktop-market.ts'
+import { readDesktopPluginEntryOverrides } from './desktop-plugin-entries.ts'
 
 /** Persistent profile managed by the desktop launcher and the ordinary dsh plugin command. */
 export const DESKTOP_PROFILE_NAME = 'desktop'
@@ -70,6 +76,7 @@ const UPSTREAM_AGENT_PRESETS_PACKAGE = '@deepseek-ai/dsh-agent-presets'
 const DESKTOP_WINDOWS_AGENT_PRESETS_ROW_ID = 'desktop-windows-agent-presets'
 const DESKTOP_WINDOWS_AGENT_PRESETS_PACKAGE = 'dsh-plugin-desktop/windows-agent-presets'
 const DEFAULT_DESKTOP_SHELL_MODE: DesktopShellMode = 'compatibility'
+const DEFAULT_HARNESS: HarnessKind = 'deepseek'
 const DEFAULT_DESKTOP_PORT = DESKTOP_DEFAULT_WEB_PORT
 const DESKTOP_WEB_SERVER_ROW_ID = 'desktop-webserver'
 const DESKTOP_WEB_SERVER_PACKAGE = 'dsh-plugin-desktop/webserver'
@@ -110,10 +117,18 @@ export function parseDesktopPort(value: unknown): number {
   throw new Error(`${BIN_NAME}: ${DESKTOP_SETTINGS_NAMESPACE}.port must be an integer from 0 through 65535`)
 }
 
+/** Parse the primary AgentFactory selected for the next generation. */
+export function parseDesktopHarness(value: unknown): HarnessKind {
+  if (value === undefined) return DEFAULT_HARNESS
+  if (value === 'deepseek' || value === 'codex') return value
+  throw new Error(`${BIN_NAME}: ${DESKTOP_SETTINGS_NAMESPACE}.harness must be "deepseek" or "codex"`)
+}
+
 /** Startup settings projected into the Loader graph before the settings plugin boots. */
 export interface DesktopStartupSettings {
   mode: DesktopShellMode
   port: number
+  harness: HarnessKind
 }
 
 /**
@@ -127,7 +142,7 @@ export function desktopStartupSettingsFromSettings(document: unknown): DesktopSt
   }
   const section = (document as Record<string, unknown>)[DESKTOP_SETTINGS_NAMESPACE]
   if (section === undefined) {
-    return { mode: DEFAULT_DESKTOP_SHELL_MODE, port: DEFAULT_DESKTOP_PORT }
+    return { mode: DEFAULT_DESKTOP_SHELL_MODE, port: DEFAULT_DESKTOP_PORT, harness: DEFAULT_HARNESS }
   }
   if (typeof section !== 'object' || section === null || Array.isArray(section)) {
     throw new Error(`${BIN_NAME}: ${DESKTOP_SETTINGS_NAMESPACE} settings must be a map`)
@@ -136,6 +151,7 @@ export function desktopStartupSettingsFromSettings(document: unknown): DesktopSt
   return {
     mode: parseDesktopShellMode(values.mode),
     port: parseDesktopPort(values.port),
+    harness: parseDesktopHarness(values.harness),
   }
 }
 
@@ -156,7 +172,7 @@ export function readDesktopStartupSettings(config: SettingsFileConfig): DesktopS
     text = readFileSync(spec.filename, 'utf8')
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { mode: DEFAULT_DESKTOP_SHELL_MODE, port: DEFAULT_DESKTOP_PORT }
+      return { mode: DEFAULT_DESKTOP_SHELL_MODE, port: DEFAULT_DESKTOP_PORT, harness: DEFAULT_HARNESS }
     }
     throw cause
   }
@@ -205,6 +221,8 @@ export interface PreparedDesktopProfile {
   mode: DesktopShellMode
   /** Persisted loopback Web port applied to every startup consumer. */
   port: number
+  /** Persisted primary AgentFactory selected for this generation. */
+  harness: HarnessKind
   /** Resolved file-backed settings document used by this generation. */
   settingsDocument: string
   /** Requested provider and the fail-closed provider effective for this generation. */
@@ -703,11 +721,23 @@ export function prepareDesktopProfile(
   } as SettingsFileConfig)
   const settingsDocument = resolveSettingsFileSpec(settingsConfig).filename
   hooks.onSettingsDocumentResolved?.(settingsDocument)
-  const { mode, port } = readDesktopStartupSettings(settingsConfig)
+  const { mode, port, harness } = readDesktopStartupSettings(settingsConfig)
   patches.push({
     id: 'settings',
     config: settingsConfig,
   })
+  const agentLoop = rows.get('agent-loop')
+  if (agentLoop?.name !== DEEPSEEK_HARNESS_PLUGIN) {
+    throw new Error(`${BIN_NAME}: desktop profile must keep the canonical ${DEEPSEEK_HARNESS_PLUGIN} row`)
+  }
+  const codexHarness = rows.get('codex-harness')
+  if (codexHarness?.name !== CODEX_HARNESS_PLUGIN) {
+    throw new Error(`${BIN_NAME}: desktop profile must keep the canonical ${CODEX_HARNESS_PLUGIN} row`)
+  }
+  patches.push(
+    { id: 'agent-loop', disabled: harness !== 'deepseek' },
+    { id: 'codex-harness', disabled: harness !== 'codex' },
+  )
   if (mode === 'advanced') {
     for (const [id, packageName] of [
       ['ui-layout', UI_LAYOUT_PACKAGE],
@@ -855,8 +885,24 @@ export function prepareDesktopProfile(
       ...rowConfig(desktopShell),
       mode,
       port,
+      harness,
     },
   })
+  // The launcher-managed plugin panel is an ordinary final Cordis patch
+  // layer. Categories never affect composition; only explicit enablement
+  // overrides become the documented `{ id, disabled }` patch form.
+  const finalRows = composeEntries([patches])
+  const availableIds = new Set<string>()
+  const collectIds = (entries: readonly EntryOptions[]): void => {
+    for (const entry of entries) {
+      if (typeof entry.id === 'string') availableIds.add(entry.id)
+      if (entry.group === true && Array.isArray(entry.config)) collectIds(entry.config)
+    }
+  }
+  collectIds(finalRows)
+  for (const [entryId, enabled] of readDesktopPluginEntryOverrides(profile.dir)) {
+    if (availableIds.has(entryId)) patches.push({ id: entryId, disabled: !enabled })
+  }
   return {
     homeDir: home,
     profile,
@@ -866,6 +912,7 @@ export function prepareDesktopProfile(
     skippedOptionalEntries,
     mode,
     port,
+    harness,
     settingsDocument,
     market: desktopMarketSnapshotWithEffective(marketSelection, effectiveMarket),
     ...(marketFailure === undefined ? {} : { marketFailure }),

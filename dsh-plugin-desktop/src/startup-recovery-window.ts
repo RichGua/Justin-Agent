@@ -424,7 +424,7 @@ export function renderDesktopStartupRecoveryHtml(model: DesktopStartupRecoveryVi
   const profileHtml = model.profiles === undefined
     ? ''
     : `<section class="card"><h2>${escapeHtml(copy.currentProfile)}</h2><p>${escapeHtml(copy.lead)}</p>${profileRows.length === 0 ? '' : `<ul>${profileRows}</ul>`}<div class="actions">${model.profileCreatorAvailable ? button('Add Profile', 'open-profile-creator') : ''}</div></section>`
-  const terminalAction = model.terminalAvailable ? button('Open DSH Terminal', 'open-terminal') : ''
+  const terminalAction = model.terminalAvailable ? button('Open RunDeep Terminal', 'open-terminal') : ''
   const rollbackAction = model.rollbackLastKnownGoodAvailable && model.profileActionToken !== undefined
     ? button('Restore last successful Profile', 'rollback-last-known-good', model.profileActionToken, true)
     : ''
@@ -645,7 +645,7 @@ export class DesktopStartupRecoveryWindow {
       } else if (action.action === 'show-diagnostics' && this.diagnosticPath !== undefined) {
         shell.showItemInFolder(this.diagnosticPath)
       } else if (action.action === 'open-terminal') {
-        if (this.options.openTerminal === undefined) throw new Error('DSH Terminal is unavailable for this startup stage.')
+        if (this.options.openTerminal === undefined) throw new Error('RunDeep Terminal is unavailable for this startup stage.')
         await this.options.openTerminal()
       } else if (action.action === 'open-profile-creator') {
         if (this.options.profileActions === undefined) throw new Error('Profile creation is unavailable for this startup stage.')

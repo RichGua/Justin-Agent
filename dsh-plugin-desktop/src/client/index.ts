@@ -21,12 +21,15 @@ export {
   createDesktopSettingsApi,
   desktopSettingsPaths,
   parseDesktopActionAcceptance,
+  parseDesktopPluginsView,
   parseDesktopRestartAcceptance,
   parseDesktopSettingsView,
 } from './desktop-settings-api.ts'
 export type {
   DesktopMarketProvider,
   DesktopMarketView,
+  DesktopPluginBundleView,
+  DesktopPluginsView,
   DesktopProfileView,
   DesktopRestartAcceptance,
   DesktopSettingsApi,
@@ -60,6 +63,7 @@ export const inject = [
   'locale',
   'connection',
   'remote',
+  'remote.pluginInventory',
   'settingsScope',
   'sessions',
   'theme',

@@ -14,3 +14,10 @@ dsh-plugin-desktop/lib/
 dsh-community-market/lib/
 
 .env.yarn
+
+# Local agent config: contains plaintext API keys and WeChat tokens.
+.justin/
+# Build and cache artifacts.
+.dsh-build/
+artifacts/
+justin_agent.egg-info/

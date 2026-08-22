@@ -6,6 +6,7 @@ import {
   createDesktopSettingsApi,
   desktopSettingsPaths,
   parseDesktopActionAcceptance,
+  parseDesktopPluginsView,
   parseDesktopRestartAcceptance,
   parseDesktopSettingsView,
   type DesktopSettingsView,
@@ -25,6 +26,26 @@ const VIEW: DesktopSettingsView = {
     { name: 'work', exists: true, webCapable: true, selectable: true, deletable: true },
   ],
   market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: true },
+}
+
+const PLUGINS = {
+  bundles: [{
+    bundleId: `bundle_${'a'.repeat(32)}`,
+    packageName: '@deepseek-ai/dsh-subagent-codex',
+    status: 'active' as const,
+    mutable: true,
+  }],
+  entries: [{
+    entryId: 'subagent-codex',
+    moduleName: '@deepseek-ai/dsh-subagent-codex',
+    enabled: true,
+    categoryId: 'deepseek',
+  }],
+  categories: [
+    { id: 'deepseek', name: 'DeepSeek Harness', builtIn: true },
+    { id: 'codex', name: 'Codex Harness', builtIn: true },
+  ],
+  restartRequired: false,
 }
 
 function json(value: unknown, status = 200): Response {
@@ -49,12 +70,23 @@ describe('Desktop settings API', () => {
     expect(parseDesktopActionAcceptance({ accepted: true })).toBeUndefined()
     expect(() => parseDesktopActionAcceptance({ accepted: true, detail: 'extra' }))
       .toThrow('invalid Desktop action response')
+    expect(parseDesktopPluginsView(PLUGINS)).toEqual(PLUGINS)
+    expect(() => parseDesktopPluginsView({ ...PLUGINS, bundles: [...PLUGINS.bundles, PLUGINS.bundles[0]] }))
+      .toThrow('duplicate Desktop plugin bundle')
   })
 
   it('uses the strict same-origin routes and request bodies', async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const path = String(input)
       if (path === desktopSettingsPaths.terminalOpen) return json({ accepted: true })
+      if (path === desktopSettingsPaths.plugins) return json(PLUGINS)
+      if (path === desktopSettingsPaths.pluginToggle) return json({ accepted: true, ...PLUGINS, restartRequired: true })
+      if (path === desktopSettingsPaths.pluginEntryToggle
+        || path === desktopSettingsPaths.pluginCategoryCreate
+        || path === desktopSettingsPaths.pluginCategoryAssign
+        || path === desktopSettingsPaths.pluginCategoryDelete) {
+        return json({ accepted: true, ...PLUGINS })
+      }
       return path === desktopSettingsPaths.settings || path === desktopSettingsPaths.profileCreate || path === desktopSettingsPaths.profileDelete
         ? json(VIEW)
         : json({ accepted: true, restartRequired: true })
@@ -66,6 +98,13 @@ describe('Desktop settings API', () => {
     await expect(api.selectProfile('work')).resolves.toEqual({ accepted: true, restartRequired: true })
     await expect(api.deleteProfile('work')).resolves.toEqual(VIEW)
     await expect(api.selectMarket('community-market')).resolves.toEqual({ accepted: true, restartRequired: true })
+    await expect(api.readPlugins()).resolves.toEqual(PLUGINS)
+    await expect(api.setPluginEnabled(PLUGINS.bundles[0]!.bundleId, false)).resolves.toEqual({ ...PLUGINS, restartRequired: true })
+    await expect(api.setPluginEntryEnabled('subagent-codex', false)).resolves.toEqual(PLUGINS)
+    await expect(api.createPluginCategory('Tools')).resolves.toEqual(PLUGINS)
+    await expect(api.assignPluginCategory('subagent-codex', 'codex')).resolves.toEqual(PLUGINS)
+    await expect(api.deletePluginCategory(`custom_${'a'.repeat(32)}`)).resolves.toEqual(PLUGINS)
+    await expect(api.restartPlugins()).resolves.toEqual({ accepted: true, restartRequired: true })
     await expect(api.openTerminal()).resolves.toBeUndefined()
 
     expect(fetcher.mock.calls.map(call => call[0])).toEqual([
@@ -74,6 +113,13 @@ describe('Desktop settings API', () => {
       desktopSettingsPaths.profileSelect,
       desktopSettingsPaths.profileDelete,
       desktopSettingsPaths.marketSelect,
+      desktopSettingsPaths.plugins,
+      desktopSettingsPaths.pluginToggle,
+      desktopSettingsPaths.pluginEntryToggle,
+      desktopSettingsPaths.pluginCategoryCreate,
+      desktopSettingsPaths.pluginCategoryAssign,
+      desktopSettingsPaths.pluginCategoryDelete,
+      desktopSettingsPaths.pluginRestart,
       desktopSettingsPaths.terminalOpen,
     ])
     expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
@@ -88,7 +134,11 @@ describe('Desktop settings API', () => {
     expect(fetcher.mock.calls[4]?.[1]).toMatchObject({
       body: JSON.stringify({ provider: 'community-market' }),
     })
-    expect(fetcher.mock.calls[5]?.[1]).toMatchObject({
+    expect(fetcher.mock.calls[6]?.[1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ bundleId: PLUGINS.bundles[0]!.bundleId, enabled: false }),
+    })
+    expect(fetcher.mock.calls[11]?.[1]).toMatchObject({
       method: 'POST',
       body: JSON.stringify({}),
     })

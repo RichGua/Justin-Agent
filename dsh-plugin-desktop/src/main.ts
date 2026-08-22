@@ -1,4 +1,4 @@
-/** DSH Desktop executable: minimal Electron bootstrap around the Host Cordis root. */
+/** RunDeep executable: minimal Electron bootstrap around the Host Cordis root. */
 
 import { app, crashReporter, dialog } from 'electron'
 import { randomUUID } from 'node:crypto'
@@ -70,6 +70,7 @@ import {
   selectDesktopMarketProvider,
 } from './desktop-market.ts'
 import DesktopSettingsController from './desktop-settings-controller.ts'
+import { DesktopPluginEntriesService } from './desktop-plugin-entries.ts'
 import { DesktopStartupRecoveryController } from './startup-recovery-controller.ts'
 import {
   DesktopStartupRecoveryWindow,
@@ -147,14 +148,14 @@ async function showInstallRollbackNotice(
   const copy = locale === 'zh'
     ? {
         title: '插件安装已回滚',
-        message: `DSH Desktop 已恢复安装 ${transaction.packageName} 前的配置。`,
-        detail: '上一次启动未能通过健康验证。DSH Desktop 已在本地保存诊断信息，并恢复 package.json、pnpm-lock.yaml 和 pnpm-workspace.yaml；诊断信息不会自动上传。',
+        message: `RunDeep 已恢复安装 ${transaction.packageName} 前的配置。`,
+        detail: '上一次启动未能通过健康验证。RunDeep 已在本地保存诊断信息，并恢复 package.json、pnpm-lock.yaml 和 pnpm-workspace.yaml；诊断信息不会自动上传。',
         confirm: '知道了',
       }
     : {
         title: 'Plugin installation rolled back',
-        message: `DSH Desktop restored the configuration from before ${transaction.packageName} was installed.`,
-        detail: 'The previous startup did not pass its health check. DSH Desktop saved diagnostics locally and restored package.json, pnpm-lock.yaml, and pnpm-workspace.yaml. Diagnostics are not uploaded automatically.',
+        message: `RunDeep restored the configuration from before ${transaction.packageName} was installed.`,
+        detail: 'The previous startup did not pass its health check. RunDeep saved diagnostics locally and restored package.json, pnpm-lock.yaml, and pnpm-workspace.yaml. Diagnostics are not uploaded automatically.',
         confirm: 'OK',
       }
   try {
@@ -781,6 +782,7 @@ async function start(): Promise<void> {
       homeDir: prepared.homeDir,
     })
     recoveryTerminalAvailable = true
+    let pluginEntries: DesktopPluginEntriesService | undefined
     const ctx = await boot(
       BIN_NAME,
       prepared.rootConfig,
@@ -808,15 +810,17 @@ async function start(): Promise<void> {
           openTerminal: () => { runtime.openTerminal() },
           requestRestart: () => runtime.requestRestart(),
         })
-        if (prepared.market.effective === 'community-market') {
-          await hostCtx.plugin(DesktopPluginsService, {
-            profileName: activeProfileName,
-            homeDir,
-            statePath: pluginManagementStatePath,
-            recoveryStatePath: startupRecoveryStatePath,
-            installAnchor: desktopInstallAnchor(),
-          })
-        }
+        await hostCtx.plugin(DesktopPluginsService, {
+          profileName: activeProfileName,
+          homeDir,
+          statePath: pluginManagementStatePath,
+          recoveryStatePath: startupRecoveryStatePath,
+          installAnchor: desktopInstallAnchor(),
+        })
+        pluginEntries = new DesktopPluginEntriesService({
+          profileDir: prepared.profile.dir,
+          loader: hostCtx.loader,
+        })
         if (logSink !== undefined) {
           fileExporter = new FileExporter(logSink)
           hostCtx.logger.exporter(fileExporter)
@@ -937,6 +941,8 @@ async function start(): Promise<void> {
         }
         hostCtx.provide('desktopSettingsController', new DesktopSettingsController({
           profiles: hostCtx.desktopProfiles,
+          plugins: hostCtx.desktopPlugins,
+          pluginEntries,
           persistProfileSelection: name => {
             selectDesktopProfile(selectionStatePath, homeDir, name)
           },
@@ -968,6 +974,7 @@ async function start(): Promise<void> {
       releasePackageResolver()
       throw cause
     })
+    await pluginEntries?.reconcile()
     generation.bindHost(ctx)
     fileExporter?.setThreshold((ctx.settings.get(DESKTOP_SETTINGS_NAMESPACE) as DesktopSettings | undefined)?.logLevel ?? 'info')
     ctx.on('settings/updated', (namespace, next) => {

@@ -74,6 +74,12 @@ export class ElectronShellGeneration {
     this.window = window
 
     const show = (): void => { this.show() }
+    let initialRevealDone = false
+    const showInitial = (): void => {
+      if (initialRevealDone) return
+      initialRevealDone = true
+      this.show()
+    }
     const activate = (): void => {
       if (applicationNeedsReveal(window, platform.platform)) this.show()
     }
@@ -163,7 +169,7 @@ export class ElectronShellGeneration {
       }
       return { action: 'deny' }
     })
-    window.once('ready-to-show', show)
+    window.once('ready-to-show', showInitial)
     let tray: Tray | undefined
     this.cleanupListeners = () => {
       app.off('activate', activate)
@@ -171,7 +177,7 @@ export class ElectronShellGeneration {
       window.off('close', close)
       window.off('focus', clearAttention)
       window.off('page-title-updated', preserveBlankTitle)
-      window.off('ready-to-show', show)
+      window.off('ready-to-show', showInitial)
       window.webContents.off('before-input-event', handleZoomShortcut)
       window.webContents.off('will-frame-navigate', navigate)
       window.webContents.off('will-redirect', redirect)
@@ -182,6 +188,11 @@ export class ElectronShellGeneration {
 
     try {
       await window.loadURL(spec.url)
+      // `ready-to-show` is normally the first reveal signal, but some Windows
+      // GPU/paint paths finish navigation without emitting it while the hidden
+      // BrowserWindow is still alive. Reveal once after a successful load as a
+      // deterministic fallback so a second application launch is never needed.
+      showInitial()
       tray = new Tray(prepareTrayIcon(spec.trayIcons, platform.platform))
       this.tray = tray
       tray.setToolTip(spec.productName)

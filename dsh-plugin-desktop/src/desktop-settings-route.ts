@@ -7,11 +7,21 @@ import type DesktopSettingsController from './desktop-settings-controller.ts'
 import type { DesktopSettingsPostResponse } from './desktop-settings-controller.ts'
 import type {
   DesktopMarketSelectRequest,
+  DesktopPluginCategoryAssignRequest,
+  DesktopPluginCategoryCreateRequest,
+  DesktopPluginCategoryDeleteRequest,
+  DesktopPluginEntryToggleRequest,
   DesktopProfileCreateRequest,
   DesktopProfileDeleteRequest,
   DesktopProfileSelectRequest,
+  DesktopPluginToggleRequest,
   DesktopSettingsErrorResponse,
 } from './desktop-settings-contract.ts'
+
+const BUNDLE_ID_PATTERN = /^bundle_[A-Za-z0-9_-]{32}$/u
+const ENTRY_ID_PATTERN = /^[A-Za-z0-9._:@/-]{1,256}$/u
+const CATEGORY_ID_PATTERN = /^(?:deepseek|codex|custom_[a-f0-9]{32})$/u
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u
 
 const MAX_SETTINGS_BODY_BYTES = 16 * 1024
 
@@ -146,6 +156,53 @@ function isMarketProvider(value: unknown): value is DesktopMarketProvider {
 function parseMarketRequest(value: unknown): DesktopMarketSelectRequest | undefined {
   if (!isExactRecord(value, 'provider') || !isMarketProvider(value.provider)) return undefined
   return { provider: value.provider }
+}
+
+function parsePluginToggleRequest(value: unknown): DesktopPluginToggleRequest | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  if (Object.keys(record).length !== 2
+    || !Object.prototype.hasOwnProperty.call(record, 'bundleId')
+    || !Object.prototype.hasOwnProperty.call(record, 'enabled')
+    || typeof record.bundleId !== 'string'
+    || !BUNDLE_ID_PATTERN.test(record.bundleId)
+    || typeof record.enabled !== 'boolean') return undefined
+  return { bundleId: record.bundleId, enabled: record.enabled }
+}
+
+function parsePluginEntryToggleRequest(value: unknown): DesktopPluginEntryToggleRequest | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  if (Object.keys(record).length !== 2
+    || typeof record.entryId !== 'string'
+    || !ENTRY_ID_PATTERN.test(record.entryId)
+    || typeof record.enabled !== 'boolean') return undefined
+  return { entryId: record.entryId, enabled: record.enabled }
+}
+
+function parsePluginCategoryCreateRequest(value: unknown): DesktopPluginCategoryCreateRequest | undefined {
+  if (!isExactRecord(value, 'name') || typeof value.name !== 'string') return undefined
+  const name = value.name.trim()
+  if (name.length === 0 || name.length > 64 || CONTROL_CHARACTER_PATTERN.test(name)) return undefined
+  return { name }
+}
+
+function parsePluginCategoryAssignRequest(value: unknown): DesktopPluginCategoryAssignRequest | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  if (Object.keys(record).length !== 2
+    || typeof record.entryId !== 'string'
+    || !ENTRY_ID_PATTERN.test(record.entryId)
+    || typeof record.categoryId !== 'string'
+    || !CATEGORY_ID_PATTERN.test(record.categoryId)) return undefined
+  return { entryId: record.entryId, categoryId: record.categoryId }
+}
+
+function parsePluginCategoryDeleteRequest(value: unknown): DesktopPluginCategoryDeleteRequest | undefined {
+  if (!isExactRecord(value, 'categoryId')
+    || typeof value.categoryId !== 'string'
+    || !/^custom_[a-f0-9]{32}$/u.test(value.categoryId)) return undefined
+  return { categoryId: value.categoryId }
 }
 
 function isEmptyRequest(value: unknown): boolean {
@@ -317,6 +374,176 @@ export async function handleDesktopMarketSelectRequest(
   } catch (cause) {
     reportError('select Market provider', cause)
     finishJson(res, 500, error('Market selection could not be saved'))
+  }
+}
+
+/** Serve direct Profile bundles even when no optional Market provider is active. */
+export async function handleDesktopPluginsRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'GET') return finishJson(res, 405, error('method not allowed'), 'GET')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, false)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  try {
+    finishJson(res, 200, controller.readPlugins())
+  } catch (cause) {
+    reportError('read plugins', cause)
+    finishJson(res, 500, error('desktop plugins unavailable'))
+  }
+}
+
+/** Persist one reversible direct-bundle toggle and return the fresh inventory. */
+export async function handleDesktopPluginToggleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  const request = parsePluginToggleRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid plugin toggle request'))
+  try {
+    finishJson(res, 200, await controller.setPluginEnabled(request.bundleId, request.enabled))
+  } catch (cause) {
+    reportError('toggle plugin', cause)
+    finishJson(res, 409, error('plugin state could not be changed'))
+  }
+}
+
+/** Persist one Cordis Loader entry switch. */
+export async function handleDesktopPluginEntryToggleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  const request = parsePluginEntryToggleRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid plugin entry toggle request'))
+  try {
+    finishJson(res, 200, await controller.setPluginEntryEnabled(request.entryId, request.enabled))
+  } catch (cause) {
+    reportError('toggle Loader plugin entry', cause)
+    finishJson(res, 409, error('plugin entry state could not be changed'))
+  }
+}
+
+/** Create one Profile-local management category. */
+export async function handleDesktopPluginCategoryCreateRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  const request = parsePluginCategoryCreateRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid plugin category creation request'))
+  try {
+    finishJson(res, 201, await controller.createPluginCategory(request.name))
+  } catch (cause) {
+    reportError('create plugin category', cause)
+    finishJson(res, 409, error('plugin category could not be created'))
+  }
+}
+
+/** Assign one Loader entry to a management category. */
+export async function handleDesktopPluginCategoryAssignRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  const request = parsePluginCategoryAssignRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid plugin category assignment request'))
+  try {
+    finishJson(res, 200, await controller.assignPluginCategory(request.entryId, request.categoryId))
+  } catch (cause) {
+    reportError('assign plugin category', cause)
+    finishJson(res, 409, error('plugin category assignment could not be changed'))
+  }
+}
+
+/** Delete one custom category and restore default assignments. */
+export async function handleDesktopPluginCategoryDeleteRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  const request = parsePluginCategoryDeleteRequest(value)
+  if (request === undefined) return finishJson(res, 400, error('invalid plugin category deletion request'))
+  try {
+    finishJson(res, 200, await controller.deletePluginCategory(request.categoryId))
+  } catch (cause) {
+    reportError('delete plugin category', cause)
+    finishJson(res, 409, error('plugin category could not be deleted'))
+  }
+}
+
+/** Queue an orderly restart only when plugin state differs from this generation. */
+export async function handleDesktopPluginRestartRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  expectedOrigin: string,
+  controller: DesktopSettingsController,
+  reportError: (operation: string, cause: unknown) => void = () => {},
+): Promise<void> {
+  if (req.method !== 'POST') return finishJson(res, 405, error('method not allowed'), 'POST')
+  if (!isSameOriginLoopbackRequest(req, expectedOrigin, true)) {
+    return finishJson(res, 403, error('forbidden'))
+  }
+  const value = await parsePostBody(req, res)
+  if (value === INVALID_BODY) return
+  if (!isEmptyRequest(value)) return finishJson(res, 400, error('invalid plugin restart request'))
+  try {
+    const operation = controller.restartPlugins()
+    finishPostResponse(
+      res,
+      operation.response.restartRequired ? 202 : 200,
+      operation,
+      'restart after plugin change',
+      reportError,
+    )
+  } catch (cause) {
+    reportError('restart after plugin change', cause)
+    finishJson(res, 500, error('plugin restart could not be requested'))
   }
 }
 

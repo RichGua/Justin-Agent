@@ -542,6 +542,51 @@ describe('desktop profile composition', {
     expect(rows.find(row => row.id === 'ui-conversation')?.disabled).toBe(false)
   })
 
+  it('keeps the DeepSeek foundation and enables exactly the selected AgentFactory', () => {
+    const home = temporaryHome()
+    writeFileSync(join(home, 'settings.yaml'), 'dsh-desktop:\n  harness: codex\n')
+
+    const prepared = prepareDesktopProfile(undefined, home, 'darwin')
+    const rows = composeEntries([prepared.patches])
+
+    expect(prepared.harness).toBe('codex')
+    expect(rows.find(row => row.id === 'agent-loop')).toEqual(expect.objectContaining({
+      name: '@deepseek-ai/dsh-agent-loop',
+      disabled: true,
+    }))
+    expect(rows.find(row => row.id === 'codex-harness')).toEqual(expect.objectContaining({
+      name: 'dsh-plugin-desktop/codex-harness',
+      disabled: false,
+    }))
+    expect(rows.find(row => row.id === 'agent')).toEqual(expect.objectContaining({
+      name: '@deepseek-ai/dsh-agent',
+    }))
+  })
+
+  it('applies Loader entry switches as the final standard id/disabled patch layer', () => {
+    const home = temporaryHome()
+    const profile = ensureDesktopProfile(home)
+    mkdirSync(join(profile, '.rundeep'), { recursive: true })
+    writeFileSync(join(profile, '.rundeep', 'plugins.json'), JSON.stringify({
+      version: 1,
+      categories: [{ id: `custom_${'a'.repeat(32)}`, name: '管理分类' }],
+      entries: [
+        { id: 'agent-loop', enabled: false, category: `custom_${'a'.repeat(32)}` },
+        { id: 'codex-harness', enabled: true },
+        { id: 'stale-entry', enabled: false },
+      ],
+    }) + '\n')
+
+    const prepared = prepareDesktopProfile(undefined, home, 'darwin')
+    const rows = composeEntries([prepared.patches])
+
+    expect(rows.find(row => row.id === 'agent-loop')?.disabled).toBe(true)
+    expect(rows.find(row => row.id === 'codex-harness')?.disabled).toBe(false)
+    expect(prepared.patches).toContainEqual({ id: 'agent-loop', disabled: true })
+    expect(prepared.patches).toContainEqual({ id: 'codex-harness', disabled: false })
+    expect(prepared.patches).not.toContainEqual({ id: 'stale-entry', disabled: true })
+  })
+
   it('reads JSON settings and defaults an absent desktop namespace to compatibility', () => {
     const home = temporaryHome()
     const path = join(home, 'desktop-settings.json')
@@ -551,10 +596,12 @@ describe('desktop profile composition', {
     expect(desktopStartupSettingsFromSettings({ 'dsh-desktop': { mode: 'advanced', port: 43_189 } })).toEqual({
       mode: 'advanced',
       port: 43_189,
+      harness: 'deepseek',
     })
     expect(desktopStartupSettingsFromSettings({ 'dsh-desktop': { mode: 'advanced' } })).toEqual({
       mode: 'advanced',
       port: 43_120,
+      harness: 'deepseek',
     })
     expect(desktopShellModeFromSettings({ unrelated: { enabled: true } })).toBe('compatibility')
   })
@@ -564,6 +611,9 @@ describe('desktop profile composition', {
     expect(() => desktopShellModeFromSettings({ 'dsh-desktop': true })).toThrow('settings must be a map')
     expect(() => desktopShellModeFromSettings({ 'dsh-desktop': { mode: 'glass' } })).toThrow(
       'must be "compatibility" or "advanced"',
+    )
+    expect(() => desktopStartupSettingsFromSettings({ 'dsh-desktop': { harness: 'both' } })).toThrow(
+      'harness must be "deepseek" or "codex"',
     )
     for (const port of [-1, 1.5, 65_536, '43189']) {
       expect(() => desktopStartupSettingsFromSettings({ 'dsh-desktop': { port } })).toThrow(

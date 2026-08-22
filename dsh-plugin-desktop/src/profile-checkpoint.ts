@@ -43,6 +43,7 @@ export const DESKTOP_PROFILE_CHECKPOINT_FILES = [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   'cordis.patch.yml',
+  '.rundeep/plugins.json',
   '.dsh-market/state.json',
 ] as const
 
@@ -53,6 +54,7 @@ const FILE_LIMITS: Record<DesktopProfileCheckpointFilename, number> = {
   'pnpm-lock.yaml': 32 * 1024 * 1024,
   'pnpm-workspace.yaml': 1 * 1024 * 1024,
   'cordis.patch.yml': 1 * 1024 * 1024,
+  '.rundeep/plugins.json': 256 * 1024,
   '.dsh-market/state.json': 1 * 1024 * 1024,
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import { apply } from '../src/client/index.ts'
+import { apply, inject } from '../src/client/index.ts'
 import { provideDesktopLayout } from '../src/client/layout-service.ts'
 import { parseDesktopClientEnvironment } from '../src/client/environment.ts'
 import {
@@ -16,6 +16,10 @@ import {
 } from '../src/window-chrome.ts'
 
 describe('desktop client environment', () => {
+  it('waits for the plugin inventory Remote before registering desktop surfaces', () => {
+    expect(inject).toContain('remote.pluginInventory')
+  })
+
   it('does not activate desktop effects for an ordinary browser URL', () => {
     vi.stubGlobal('window', { location: { search: '' } })
     const effect = vi.fn()

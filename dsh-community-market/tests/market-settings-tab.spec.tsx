@@ -382,7 +382,7 @@ describe('MarketSettingsTab', () => {
     expect(plugin.querySelector('[aria-hidden="true"]')).not.toBeNull()
   })
 
-  it('falls back in the same dialog to a Host-derived manual command and opens DSH Terminal', async () => {
+  it('falls back in the same dialog to a Host-derived manual command and opens RunDeep Terminal', async () => {
     const item = makeItem(firstSource, 'manual-github-plugin', 'Manual GitHub Plugin', ['tools'])
     const manualCatalog: MarketCatalogResponse = {
       ...catalogForSource(firstSource, [item]),

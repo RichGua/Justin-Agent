@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { boot } from '@deepseek-ai/dsh-app-boot'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   createLaunchEnvironmentSnapshot,
   DSH_LAUNCH_ENVIRONMENT_KEY,
@@ -31,11 +32,15 @@ try {
   writeFileSync(join(home, 'settings.yaml'), [
     'dsh-desktop:',
     '  mode: advanced',
+    '  harness: codex',
     'agent-presets:',
     '  default: minimal',
     '',
   ].join('\n'))
   const prepared = prepareDesktopProfile('1', home, 'win32')
+  if (prepared.harness !== 'codex') {
+    throw new Error(`profile smoke selected unexpected Harness ${prepared.harness}`)
+  }
   const hostServicePluginDir = join(
     prepared.profile.dir,
     'node_modules',
@@ -158,6 +163,15 @@ try {
   )
   await runtime.mountScheduled()
 
+  const codexProbe = await ctx.agents.create({ sessionId: SessionId('profile-smoke-codex-agent') })
+  try {
+    if (codexProbe.agent.options.provider !== 'codex') {
+      throw new Error(`assembled profile selected unexpected agent provider ${String(codexProbe.agent.options.provider)}`)
+    }
+  } finally {
+    await codexProbe.dispose()
+  }
+
   if (ctx.get('desktopPnpm') === undefined) {
     throw new Error('assembled desktop profile is missing the desktop pnpm Host capability')
   }
@@ -223,7 +237,7 @@ try {
     throw new Error('assembled desktop profile is missing the update tray command')
   }
   if (process.platform !== 'linux'
-    && !trayItems.some(item => item.label() === 'Open DSH Terminal')) {
+    && !trayItems.some(item => item.label() === 'Open RunDeep Terminal')) {
     throw new Error('assembled desktop profile is missing the terminal tray command')
   }
   const profileMenu = trayItems.find(item => item.label() === 'Profile: desktop')

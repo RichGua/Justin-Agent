@@ -26,6 +26,7 @@ import { RENDERER_BOOT_REPORT_PATH, type RendererBootReport } from '../src/rende
 const config: DesktopConfig = {
   mode: 'compatibility',
   port: 43_120,
+  harness: 'deepseek',
   width: 1280,
   height: 840,
   minWidth: 900,
@@ -161,7 +162,7 @@ describe('desktop Host plugin', () => {
   it('defaults to compatibility mode and validates both schemas', () => {
     expect(Config({} as DesktopConfig)).toEqual(config)
     expect(Config({ mode: 'advanced' } as DesktopConfig)).toEqual({ ...config, mode: 'advanced' })
-    expect(DesktopSettingsSchema({} as DesktopSettings)).toEqual({ mode: 'compatibility', port: 43_120, logLevel: 'info' })
+    expect(DesktopSettingsSchema({} as DesktopSettings)).toEqual({ mode: 'compatibility', port: 43_120, harness: 'deepseek', logLevel: 'info' })
     expect(() => DesktopSettingsSchema({ port: -1 } as DesktopSettings)).toThrow()
     expect(() => DesktopSettingsSchema({ port: 1.5 } as DesktopSettings)).toThrow()
     expect(() => DesktopSettingsSchema({ port: 65_536 } as DesktopSettings)).toThrow()
@@ -220,8 +221,8 @@ describe('desktop Host plugin', () => {
     expect(harness.shell()).toEqual(expect.objectContaining({
       mode: 'compatibility',
       url: 'http://127.0.0.1:43120/?dsh-desktop-mode=compatibility&dsh-desktop-platform=darwin',
-      productName: 'DSH Desktop',
-      windowTitle: 'DeepSeek Harness Desktop',
+      productName: 'RunDeep',
+      windowTitle: 'RunDeep',
       readThemeSource: expect.any(Function),
     }))
     expect(harness.shell()?.iconPath.endsWith(join('build', 'app-icon-mac.png'))).toBe(true)
@@ -331,15 +332,15 @@ describe('desktop Host plugin', () => {
     apply(harness.ctx, config)
 
     await harness.notify(
-      { mode: 'compatibility', port: 0, logLevel: 'info' },
-      { mode: 'compatibility', port: 0, logLevel: 'info' },
+      { mode: 'compatibility', port: 0, harness: 'deepseek', logLevel: 'info' },
+      { mode: 'compatibility', port: 0, harness: 'deepseek', logLevel: 'info' },
     )
     expect(harness.restart).not.toHaveBeenCalled()
 
     harness.restart.mockImplementation(() => new Promise<void>(() => {}))
     await harness.notify(
-      { mode: 'advanced', port: 0, logLevel: 'info' },
-      { mode: 'compatibility', port: 0, logLevel: 'info' },
+      { mode: 'advanced', port: 0, harness: 'deepseek', logLevel: 'info' },
+      { mode: 'compatibility', port: 0, harness: 'deepseek', logLevel: 'info' },
     )
     await vi.runAllTimersAsync()
     expect(harness.restart).toHaveBeenCalledOnce()
@@ -351,17 +352,32 @@ describe('desktop Host plugin', () => {
     apply(harness.ctx, config)
 
     await harness.notify(
-      { mode: 'compatibility', port: 0, logLevel: 'debug' },
-      { mode: 'compatibility', port: 0, logLevel: 'info' },
+      { mode: 'compatibility', port: 0, harness: 'deepseek', logLevel: 'debug' },
+      { mode: 'compatibility', port: 0, harness: 'deepseek', logLevel: 'info' },
     )
     expect(harness.restart).not.toHaveBeenCalled()
 
     harness.restart.mockImplementation(() => new Promise<void>(() => {}))
     await harness.notify(
-      { mode: 'compatibility', port: 43_189, logLevel: 'debug' },
-      { mode: 'compatibility', port: 0, logLevel: 'debug' },
+      { mode: 'compatibility', port: 43_189, harness: 'deepseek', logLevel: 'debug' },
+      { mode: 'compatibility', port: 0, harness: 'deepseek', logLevel: 'debug' },
     )
     await vi.runAllTimersAsync()
+    expect(harness.restart).toHaveBeenCalledOnce()
+  })
+
+  it('requests one orderly restart after the primary Harness changes', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    apply(harness.ctx, config)
+    harness.restart.mockImplementation(() => new Promise<void>(() => {}))
+
+    await harness.notify(
+      { mode: 'compatibility', port: 43_120, harness: 'codex', logLevel: 'info' },
+      { mode: 'compatibility', port: 43_120, harness: 'deepseek', logLevel: 'info' },
+    )
+    await vi.runAllTimersAsync()
+
     expect(harness.restart).toHaveBeenCalledOnce()
   })
 

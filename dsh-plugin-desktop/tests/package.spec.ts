@@ -90,6 +90,10 @@ describe('published package surface', () => {
       types: './lib/types/windows-agent-presets.d.ts',
       default: './lib/windows-agent-presets.js',
     })
+    expect(manifest.exports).toHaveProperty('./codex-harness', {
+      types: './lib/types/codex-harness.d.ts',
+      default: './lib/codex-harness.js',
+    })
     expect(manifest.exports).toHaveProperty('./terminal', {
       types: './lib/types/terminal.d.ts',
       default: './lib/terminal.js',
@@ -153,6 +157,13 @@ describe('published package surface', () => {
       dshmarket: '1.17.1',
     })
     expect(manifest.optionalDependencies ?? {}).not.toHaveProperty('dshmarket')
+  })
+
+  it('ships the official Codex SDK instead of a one-shot Codex subagent', () => {
+    expect(manifest.dependencies).toHaveProperty('@openai/codex-sdk', '0.149.0')
+    expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-codex')
+    expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8'))
+      .toContain('name: dsh-plugin-desktop/codex-harness')
   })
 
   it('patches app boot to accept an empty patch layer', () => {
@@ -544,8 +555,8 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(manifest.version).toBe(workspaceManifest.version)
-    expect(manifest.build?.productName).toBe('DSH Desktop')
-    expect(manifest.build?.appId).toBe('ai.deepseek.dsh.desktop')
+    expect(manifest.build?.productName).toBe('RunDeep')
+    expect(manifest.build?.appId).toBe('com.rundeep.desktop')
     expect(manifest.build?.asarUnpack).toEqual([
       'package.json',
       'cordis.patch.yml',
@@ -563,6 +574,7 @@ describe('published package surface', () => {
       'docs/**',
     ]))
     expect(manifest.build?.files).toEqual([
+      'build/app-icon.svg',
       'build/app-icon.png',
       'build/app-icon-mac.png',
       'build/tray-icon.svg',
@@ -575,12 +587,12 @@ describe('published package surface', () => {
     expect(manifest.build?.mac?.icon).toBe('build/app-icon-mac.png')
     expect(manifest.build?.mac?.mergeASARs).toBe(false)
     expect(manifest.build?.mac?.signIgnore).toEqual(['\\.(?:pak|dat|wasm)$'])
-    expect(manifest.build?.win?.icon).toBe('build/app-icon.png')
+    expect(manifest.build?.win?.icon).toBe('build/app-icon.ico')
     expect(manifest.build?.win?.target).toEqual([{
       target: 'nsis',
       arch: ['x64'],
     }])
-    expect(manifest.build?.win?.artifactName).toBe('DSH-Desktop-${version}-${arch}-Portable.${ext}')
+    expect(manifest.build?.win?.artifactName).toBe('RunDeep-${version}-${arch}-Portable.${ext}')
     expect(manifest.build?.nsis).toEqual({
       license: 'THIRD_PARTY_NOTICES.md',
       oneClick: false,
@@ -590,9 +602,9 @@ describe('published package surface', () => {
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
       differentialPackage: false,
-      shortcutName: 'DSH Desktop',
+      shortcutName: 'RunDeep',
       useZip: true,
-      artifactName: 'DSH-Desktop-${version}-${arch}-Setup.${ext}',
+      artifactName: 'RunDeep-${version}-${arch}-Setup.${ext}',
     })
     expect(manifest.build?.linux?.icon).toBe('build/app-icon.png')
   })
@@ -715,12 +727,12 @@ describe('published package surface', () => {
     }
   })
 
-  it('keeps the iOS Default source icon unmodified', () => {
+  it('keeps the generated RunDeep application icon stable', () => {
     const digest = createHash('sha256')
       .update(readFileSync(new URL('build/app-icon.png', packageRoot)))
       .digest('hex')
 
-    expect(digest).toBe('315fbc6e57ff1f34894f21f66fb7f9f26deccf78333c71fad21a6cec64e7de80')
+    expect(digest).toBe('1b4b43d958102b3030d10eed81f593e397454abdb4651fa748ecc3150966550f')
   })
 
   it('generates a centered macOS icon with a 100-pixel visual inset', async () => {

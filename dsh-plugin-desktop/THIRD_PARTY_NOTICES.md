@@ -1,5 +1,5 @@
 # Third-Party Notices
-DSH Desktop distributes the following third-party packages inside its installers.
+RunDeep distributes the following third-party packages inside its installers.
 Each package ships with its own license text in the application files; this list records
 the package names, versions, and licenses for transparency.
 | Package | Version | License |
@@ -235,16 +235,18 @@ the package names, versions, and licenses for transparency.
 | @google/genai | 1.52.0 | Apache-2.0 |
 | @hono/node-server | 2.1.0 | MIT |
 | @img/colour | 1.1.0 | MIT |
-| @img/sharp-darwin-arm64 | 0.35.3 | Apache-2.0 |
-| @img/sharp-darwin-x64 | 0.35.3 | Apache-2.0 |
-| @img/sharp-libvips-darwin-arm64 | 1.3.2 | LGPL-3.0-or-later |
-| @img/sharp-libvips-darwin-x64 | 1.3.2 | LGPL-3.0-or-later |
+| @img/sharp-win32-arm64 | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
+| @img/sharp-win32-x64 | 0.35.3 | Apache-2.0 AND LGPL-3.0-or-later |
 | @joplin/turndown-plugin-gfm | 1.0.67 | MIT |
-| @koromix/koffi-darwin-arm64 | 3.1.5 | MIT |
-| @koromix/koffi-darwin-x64 | 3.1.5 | MIT |
+| @koromix/koffi-win32-arm64 | 3.1.5 | MIT |
+| @koromix/koffi-win32-x64 | 3.1.5 | MIT |
 | @mistralai/mistralai | 2.2.6 | Apache-2.0 |
 | @mixmark-io/domino | 2.2.0 | BSD-2-Clause |
 | @modelcontextprotocol/sdk | 1.30.0 | MIT |
+| @openai/codex | 0.149.0 | Apache-2.0 |
+| @openai/codex-sdk | 0.149.0 | Apache-2.0 |
+| @openai/codex-win32-arm64 | 0.149.0-win32-arm64 | Apache-2.0 |
+| @openai/codex-win32-x64 | 0.149.0-win32-x64 | Apache-2.0 |
 | @opentelemetry/api | 1.9.1 | Apache-2.0 |
 | @opentelemetry/api-logs | 0.220.0 | Apache-2.0 |
 | @opentelemetry/core | 2.9.0 | Apache-2.0 |
@@ -295,8 +297,8 @@ the package names, versions, and licenses for transparency.
 | @types/unist | 3.0.3 | MIT |
 | @ungap/structured-clone | 1.3.3 | ISC |
 | @vscode/ripgrep | 1.18.0 | MIT |
-| @vscode/ripgrep-darwin-arm64 | 1.18.0 | MIT |
-| @vscode/ripgrep-darwin-x64 | 1.18.0 | MIT |
+| @vscode/ripgrep-win32-arm64 | 1.18.0 | MIT |
+| @vscode/ripgrep-win32-x64 | 1.18.0 | MIT |
 | accepts | 2.0.0 | MIT |
 | adm-zip | 0.6.0 | MIT |
 | agent-base | 7.1.4 | MIT |
@@ -461,8 +463,8 @@ the package names, versions, and licenses for transparency.
 | node-addon-api | 7.1.1 | MIT |
 | node-addon-native-custom-loader | 0.1.4 | MIT |
 | node-addon-require-builtin | 0.1.4 | MIT |
-| node-addon-require-builtin-darwin-arm64 | 0.1.4 | MIT |
-| node-addon-require-builtin-darwin-x64 | 0.1.4 | MIT |
+| node-addon-require-builtin-win32-arm64-msvc | 0.1.4 | MIT |
+| node-addon-require-builtin-win32-x64-msvc | 0.1.4 | MIT |
 | node-domexception | 1.0.0 | MIT |
 | node-fetch | 3.3.2 | MIT |
 | node-pty | 1.2.0-beta.15 | MIT |
@@ -548,4 +550,4 @@ the package names, versions, and licenses for transparency.
 | zod-to-json-schema | 3.25.2 | ISC |
 | zustand | 4.4.7 | MIT |
 | zwitch | 2.0.4 | MIT |
-> Notice-required licenses in use: LGPL-3.0-or-later. Their license texts ship inside node_modules; see the package LICENSE files for the full terms.
+> Notice-required licenses in use: Apache-2.0 AND LGPL-3.0-or-later. Their license texts ship inside node_modules; see the package LICENSE files for the full terms.

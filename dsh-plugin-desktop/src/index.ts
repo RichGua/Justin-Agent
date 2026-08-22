@@ -1,4 +1,4 @@
-/** DSH Desktop Host plugin: owns the selected native shell generation. */
+/** RunDeep Host plugin: owns the selected native shell generation. */
 
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -29,6 +29,13 @@ import {
 import {
   DESKTOP_DIAGNOSTICS_EXPORT_PATH,
   DESKTOP_MARKET_SELECT_PATH,
+  DESKTOP_PLUGIN_CATEGORY_ASSIGN_PATH,
+  DESKTOP_PLUGIN_CATEGORY_CREATE_PATH,
+  DESKTOP_PLUGIN_CATEGORY_DELETE_PATH,
+  DESKTOP_PLUGIN_ENTRY_TOGGLE_PATH,
+  DESKTOP_PLUGINS_PATH,
+  DESKTOP_PLUGIN_RESTART_PATH,
+  DESKTOP_PLUGIN_TOGGLE_PATH,
   DESKTOP_PROFILE_CREATE_PATH,
   DESKTOP_PROFILE_CREATE_WINDOW_PATH,
   DESKTOP_PROFILE_DELETE_PATH,
@@ -40,6 +47,13 @@ import {
 import {
   handleDesktopDiagnosticsExportRequest,
   handleDesktopMarketSelectRequest,
+  handleDesktopPluginCategoryAssignRequest,
+  handleDesktopPluginCategoryCreateRequest,
+  handleDesktopPluginCategoryDeleteRequest,
+  handleDesktopPluginEntryToggleRequest,
+  handleDesktopPluginsRequest,
+  handleDesktopPluginRestartRequest,
+  handleDesktopPluginToggleRequest,
   handleDesktopProfileCreateRequest,
   handleDesktopProfileCreateWindowRequest,
   handleDesktopProfileDeleteRequest,
@@ -53,6 +67,7 @@ import { desktopBootRecoveryInjections } from './desktop-boot-recovery.ts'
 import type { DesktopShellMode } from './runtime.ts'
 import type {} from './runtime.ts'
 import { DESKTOP_DEFAULT_WEB_PORT } from './desktop-port.ts'
+import type { HarnessKind } from './harnesses.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'desktop-shell'
@@ -64,7 +79,15 @@ export const inject = ['webServer', 'webRuntime', 'appExit', 'settings']
 /** Standard settings namespace shared by tray and configuration surfaces. */
 export const DESKTOP_SETTINGS_NAMESPACE = settingsNamespace('dsh-desktop')
 
-export { HARNESS_PROVIDERS, harnessProviderForBundle, type HarnessKind, type HarnessProvider } from './harnesses.ts'
+export {
+  CODEX_HARNESS_PLUGIN,
+  DEEPSEEK_HARNESS_FOUNDATION,
+  DEEPSEEK_HARNESS_PLUGIN,
+  HARNESS_PROVIDERS,
+  harnessProviderForPlugin,
+  type HarnessKind,
+  type HarnessProvider,
+} from './harnesses.ts'
 
 const UI_THEME_SETTINGS_NAMESPACE = settingsNamespace(THEME_SETTINGS_NAMESPACE)
 const UI_LOCALE_SETTINGS_NAMESPACE = settingsNamespace(LOCALE_SETTINGS_NAMESPACE)
@@ -75,6 +98,8 @@ export interface DesktopSettings {
   mode: DesktopShellMode
   /** Loopback Web port selected for the next application generation; zero requests a random port. */
   port: number
+  /** Primary AgentFactory selected for the next application generation. */
+  harness: Extract<HarnessKind, 'deepseek' | 'codex'>
   /** Log verbosity threshold applied to the file logger. */
   logLevel: 'debug' | 'info' | 'warn' | 'error'
 }
@@ -83,6 +108,7 @@ export interface DesktopSettings {
 export const DesktopSettingsSchema: z<DesktopSettings> = z.object({
   mode: z.union(['compatibility', 'advanced'] as const).default('compatibility'),
   port: z.number().step(1).min(0).max(65_535).default(DESKTOP_DEFAULT_WEB_PORT),
+  harness: z.union(['deepseek', 'codex'] as const).default('deepseek'),
   logLevel: z.union(['debug', 'info', 'warn', 'error'] as const).default('info'),
 })
 
@@ -92,6 +118,8 @@ export interface Config {
   mode: DesktopShellMode
   /** Configured loopback Web port used to detect restart-applied settings changes. */
   port: number
+  /** Primary AgentFactory selected before the Loader graph mounts. */
+  harness: Extract<HarnessKind, 'deepseek' | 'codex'>
   /** Initial window width in CSS pixels. */
   width: number
   /** Initial window height in CSS pixels. */
@@ -106,6 +134,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   mode: z.union(['compatibility', 'advanced'] as const).default('compatibility'),
   port: z.number().step(1).min(0).max(65_535).default(DESKTOP_DEFAULT_WEB_PORT),
+  harness: z.union(['deepseek', 'codex'] as const).default('deepseek'),
   width: z.number().step(1).min(800).default(1280),
   height: z.number().step(1).min(600).default(840),
   minWidth: z.number().step(1).min(640).default(900),
@@ -139,8 +168,8 @@ export function apply(ctx: Context, config: Config): void {
   const runtime = ctx.get('desktopRuntime')
   if (runtime === undefined) {
     process.stderr.write(
-      'dsh-plugin-desktop: this profile is composed with the DSH Desktop shell, which requires the desktop launcher (desktopRuntime).\n'
-      + 'Start it with `dsh-desktop`, or select this profile inside the packaged DSH Desktop application.\n'
+      'dsh-plugin-desktop: this profile is composed with the RunDeep shell, which requires the desktop launcher (desktopRuntime).\n'
+      + 'Start it with `dsh-desktop`, or select this profile inside the packaged RunDeep application.\n'
       + 'The desktop terminal, profile, and update rows stay inactive in an ordinary DSH boot.\n',
     )
     return
@@ -191,6 +220,13 @@ export function apply(ctx: Context, config: Config): void {
       [DESKTOP_PROFILE_ROLLBACK_PATH, handleDesktopProfileRollbackRequest],
       [DESKTOP_PROFILE_SELECT_PATH, handleDesktopProfileSelectRequest],
       [DESKTOP_MARKET_SELECT_PATH, handleDesktopMarketSelectRequest],
+      [DESKTOP_PLUGINS_PATH, handleDesktopPluginsRequest],
+      [DESKTOP_PLUGIN_TOGGLE_PATH, handleDesktopPluginToggleRequest],
+      [DESKTOP_PLUGIN_ENTRY_TOGGLE_PATH, handleDesktopPluginEntryToggleRequest],
+      [DESKTOP_PLUGIN_CATEGORY_CREATE_PATH, handleDesktopPluginCategoryCreateRequest],
+      [DESKTOP_PLUGIN_CATEGORY_ASSIGN_PATH, handleDesktopPluginCategoryAssignRequest],
+      [DESKTOP_PLUGIN_CATEGORY_DELETE_PATH, handleDesktopPluginCategoryDeleteRequest],
+      [DESKTOP_PLUGIN_RESTART_PATH, handleDesktopPluginRestartRequest],
       [DESKTOP_TERMINAL_OPEN_PATH, handleDesktopTerminalOpenRequest],
       [DESKTOP_DIAGNOSTICS_EXPORT_PATH, handleDesktopDiagnosticsExportRequest],
     ] as const
@@ -261,7 +297,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => {
     let pending: ReturnType<typeof setImmediate> | undefined
     const stopWatching = settings.watch((next) => {
-      if (next.mode === config.mode && next.port === config.port) {
+      if (next.mode === config.mode && next.port === config.port && next.harness === config.harness) {
         if (pending !== undefined) clearImmediate(pending)
         pending = undefined
         return

@@ -15,6 +15,7 @@ import type { DesktopClientPlatform } from './environment.ts'
 export interface DesktopShellSettings {
   readonly mode: 'compatibility' | 'advanced'
   readonly port: number
+  readonly harness: 'deepseek' | 'codex'
   readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
 }
 
