@@ -23,10 +23,15 @@ affected by harness switches.
 ### Codex Harness configuration
 
 The `codex-harness` Loader row takes its values from the ordinary profile patch
-or the `dsh-desktop` settings namespace. Without configuration it runs through
-the official Codex CLI defaults: `~/.codex/config.toml`, the ambient OpenAI
-login, or `CODEX_API_KEY`. To use it as an independent harness against any
-OpenAI-compatible endpoint, override the row:
+or the `dsh-desktop` settings namespace. By default it reuses the DSH base
+model (`useBaseModel: true`): the harness reads the base model selection
+(`provider`, `model`, reasoning effort), points the Codex CLI at the matching
+Responses API endpoint (DeepSeek uses `https://api.deepseek.com`), and resolves
+the base provider key reference (`DEEPSEEK_API_KEY`) through `ctx.credentials`,
+so no separate Codex credential is needed. Codex tool executions are projected
+into the session as ordinary tool calls and results.
+
+An explicit `model`, `baseUrl`, or `apiKeyRef` always wins over the base model:
 
 ```yaml
 - id: codex-harness
@@ -34,13 +39,14 @@ OpenAI-compatible endpoint, override the row:
     baseUrl: https://api.example.com/v1
     apiKeyRef: CODEX_API_KEY
     model: some-model-name
+    useBaseModel: false
 ```
 
-`baseUrl` replaces the endpoint. `apiKeyRef` names a DSH credential reference
-(an environment-variable name) whose value is resolved through
-`ctx.credentials` when the harness factory starts, so the key never has to be
-written into the profile; `model` selects the model for that endpoint. When
-neither `baseUrl` nor `apiKeyRef` is set, the official Codex defaults apply.
+`baseUrl` replaces the endpoint and `apiKeyRef` names the credential reference
+used for its key, resolved through `ctx.credentials` when the harness factory
+starts, so the key never has to be written into the profile. Set
+`useBaseModel: false` to stop following the base model. Tool approvals default
+to `on-request`; set `approvalPolicy` explicitly to change that.
 
 The Electron executable is minimal bootstrap code. It acquires the single-instance lock, resolves the selected DSH profile, provides the native runtime capability, and boots the Host Cordis root in the Electron main process. The `desktop-shell` Host plugin owns the `BrowserWindow`, navigation policy, settings namespace, and close-versus-quit lifecycle through Cordis effects. The native runtime owns the physical tray, while `desktop-shell`, `desktop-profiles`, `desktop-terminal`, and `desktop-updates` contribute effect-scoped commands through its ordered item registry.
 

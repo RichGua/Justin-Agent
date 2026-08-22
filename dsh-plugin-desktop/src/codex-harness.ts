@@ -25,14 +25,19 @@ import {
   type CancelOptions,
   type CreateAgentOptions,
   type InboxTarget,
+  type ModelSelection,
   type PreStepDecision,
   type ResumeAgentOptions,
   type SessionStartSource,
 } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-default-model'
 import {
+  CallId,
   createAssistantMessage,
+  createToolResultMessage,
   errorChain,
   type ContentBlock,
+  type ReplayEnvelope,
   type StreamChunk,
   type TokenUsage,
 } from '@deepseek-ai/dsh-llm'
@@ -69,11 +74,71 @@ export const inject = ['agents', 'sessions', 'attachments']
 
 declare module '@deepseek-ai/dsh-session' {
   interface SessionEventMap {
-    /** Official Codex thread identity used to continue after a DSH resume. */
+    /** Legacy Codex thread identity written by Desktop 2.0.2 and earlier. */
     'codex/thread': { threadId: string }
-    /** Lossless completed Codex item for diagnostics and future UI adapters. */
+    /** Legacy lossless Codex diagnostic item written by Desktop 2.0.2 and earlier. */
     'codex/item': { turn: number; step: number; item: ThreadItem }
   }
+}
+
+const CODEX_REPLAY_KIND = 'dsh-plugin-desktop/codex-thread'
+const CODEX_REPLAY_VERSION = 1
+
+/** DeepSeek Responses API endpoint reused from the DSH base model. */
+const DEEPSEEK_API_BASE = 'https://api.deepseek.com'
+/** Default credential reference of the DSH base DeepSeek provider. */
+const DEEPSEEK_API_KEY_ENV = 'DEEPSEEK_API_KEY'
+
+/** Reasoning-effort ids the Codex CLI accepts; a base model id outside this set is ignored. */
+const CODEX_REASONING_EFFORTS = new Set<string>(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+
+interface CodexReplayResponse {
+  readonly kind: typeof CODEX_REPLAY_KIND
+  readonly version: typeof CODEX_REPLAY_VERSION
+  readonly threadId: string
+}
+
+function codexReplayState(threadId: string): ReplayEnvelope {
+  return {
+    response: {
+      kind: CODEX_REPLAY_KIND,
+      version: CODEX_REPLAY_VERSION,
+      threadId,
+    } satisfies CodexReplayResponse,
+  }
+}
+
+function codexThreadIdFromReplayState(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const response = (value as { response?: unknown }).response
+  if (typeof response !== 'object' || response === null) return undefined
+  const candidate = response as Partial<CodexReplayResponse>
+  return candidate.kind === CODEX_REPLAY_KIND
+    && candidate.version === CODEX_REPLAY_VERSION
+    && typeof candidate.threadId === 'string'
+    && candidate.threadId.length > 0
+    ? candidate.threadId
+    : undefined
+}
+
+/** Resolve the newest native thread identity from the standard replay seam or a legacy event. */
+function persistedCodexThreadId(events: readonly Session['events'][number][]): string | undefined {
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index]
+    if (event?.type === 'codex/thread') {
+      if (event.data.threadId.length > 0) return event.data.threadId
+    } else if (event?.type === 'assistant/message') {
+      const source = event.data.message.source
+      if (source.kind === 'model' && source.provider === 'codex') {
+        const threadId = codexThreadIdFromReplayState(source.replayState)
+        if (threadId !== undefined) return threadId
+      }
+    } else if (event?.type === 'assistant/chunk' && event.data.chunk.type === 'finish') {
+      const threadId = codexThreadIdFromReplayState(event.data.chunk.replayState)
+      if (threadId !== undefined) return threadId
+    }
+  }
+  return undefined
 }
 
 /** Loader-owned defaults for native Codex execution. */
@@ -89,6 +154,8 @@ export interface Config {
   baseUrl?: string
   /** Credential reference (environment-variable name) for the endpoint API key. */
   apiKeyRef?: string
+  /** Reuse the DSH base model (endpoint, key, model, reasoning) when no explicit values are set. */
+  useBaseModel?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -96,13 +163,14 @@ export const Config: z<Config> = z.object({
   sandboxMode: z.union(['read-only', 'workspace-write', 'danger-full-access'] as const)
     .default('workspace-write'),
   approvalPolicy: z.union(['never', 'on-request', 'on-failure', 'untrusted'] as const)
-    .default('never'),
+    .default('on-request'),
   skipGitRepoCheck: z.boolean().default(true),
   modelReasoningEffort: z.union(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const),
   networkAccessEnabled: z.boolean(),
   webSearchMode: z.union(['disabled', 'cached', 'live'] as const),
   baseUrl: z.string(),
   apiKeyRef: z.string(),
+  useBaseModel: z.boolean().default(true),
 })
 
 /** Narrow official SDK faces used by the adapter and replaceable in tests. */
@@ -174,6 +242,34 @@ function throwAbort(signal: AbortSignal): never {
   throw new Error('Codex turn aborted')
 }
 
+/** Serialize the request payload of one Codex tool item for the DSH tool card. */
+function toolArgumentsJson(item: ThreadItem): string {
+  switch (item.type) {
+    case 'command_execution': return JSON.stringify({ command: item.command })
+    case 'file_change': return JSON.stringify({ changes: item.changes })
+    case 'mcp_tool_call': return JSON.stringify({ server: item.server, tool: item.tool, arguments: item.arguments })
+    case 'web_search': return JSON.stringify({ query: item.query })
+    default: return '{}'
+  }
+}
+
+/** Project one Codex tool item's terminal output as the DSH tool-result text. */
+function toolOutputText(item: ThreadItem): string {
+  switch (item.type) {
+    case 'command_execution': {
+      const output = item.aggregated_output.trim()
+      return output.length === 0 ? `exit ${item.exit_code ?? 'unknown'}` : output
+    }
+    case 'file_change': return item.changes.map(change => `${change.kind} ${change.path}`).join('\n')
+    case 'mcp_tool_call': {
+      if (item.result !== undefined) return JSON.stringify(item.result.content)
+      return item.error?.message ?? ''
+    }
+    case 'web_search': return ''
+    default: return ''
+  }
+}
+
 /** One live DSH Agent whose model/tool driver is an official Codex thread. */
 export class CodexHarnessAgent implements Agent {
   readonly inbox: Inbox
@@ -193,9 +289,10 @@ export class CodexHarnessAgent implements Agent {
     public readonly session: Session,
     private readonly codexPromise: Promise<CodexClientLike>,
     private readonly config: Config,
+    private readonly baseModel?: ModelSelection,
   ) {
     const requestedCodexModel = requestedOptions.provider === 'codex' ? requestedOptions.model : undefined
-    const model = requestedCodexModel ?? config.model
+    const model = requestedCodexModel ?? config.model ?? baseModel?.model
     this.options = { provider: 'codex', ...(model === undefined ? {} : { model }) }
     this.dispatch = agentEvents(hostCtx, this)
     this.inbox = new Inbox(session, {
@@ -207,7 +304,7 @@ export class CodexHarnessAgent implements Agent {
     this.phase = { kind: 'idle', lastTurn }
     this.scope = createScope(hostCtx, this)
     this.ctx = this.scope.ctx.extend({ agent: this })
-    this.threadId = session.events.findLast(event => event.type === 'codex/thread')?.data.threadId
+    this.threadId = persistedCodexThreadId(session.events)
   }
 
   get status(): AgentStatus {
@@ -369,13 +466,18 @@ export class CodexHarnessAgent implements Agent {
   }
 
   private threadOptions(): ThreadOptions {
+    const baseEffort = this.baseModel?.reasoningEffort
+    const reasoningEffort = this.config.modelReasoningEffort
+      ?? (baseEffort !== undefined && CODEX_REASONING_EFFORTS.has(baseEffort)
+        ? baseEffort as ModelReasoningEffort
+        : undefined)
     return {
       ...(this.options.model === undefined ? {} : { model: this.options.model }),
       ...(this.session.header.cwd === undefined ? {} : { workingDirectory: this.session.header.cwd }),
       ...(this.config.sandboxMode === undefined ? {} : { sandboxMode: this.config.sandboxMode }),
       ...(this.config.approvalPolicy === undefined ? {} : { approvalPolicy: this.config.approvalPolicy }),
       ...(this.config.skipGitRepoCheck === undefined ? {} : { skipGitRepoCheck: this.config.skipGitRepoCheck }),
-      ...(this.config.modelReasoningEffort === undefined ? {} : { modelReasoningEffort: this.config.modelReasoningEffort }),
+      ...(reasoningEffort === undefined ? {} : { modelReasoningEffort: reasoningEffort }),
       ...(this.config.networkAccessEnabled === undefined ? {} : { networkAccessEnabled: this.config.networkAccessEnabled }),
       ...(this.config.webSearchMode === undefined ? {} : { webSearchMode: this.config.webSearchMode }),
     }
@@ -421,6 +523,34 @@ export class CodexHarnessAgent implements Agent {
         if (directory !== undefined) await rm(directory, { recursive: true, force: true })
       },
     }
+  }
+
+  /** Project one completed Codex tool item into the DSH tool-call/result pair. */
+  private projectToolItem(item: ThreadItem, turn: number, step: number): void {
+    if (item.type === 'agent_message' || item.type === 'reasoning'
+      || item.type === 'todo_list' || item.type === 'error') return
+    const callId = CallId(item.id)
+    const failed = item.type === 'command_execution' || item.type === 'file_change'
+      ? item.status === 'failed'
+      : item.type === 'mcp_tool_call'
+        ? item.status === 'failed'
+        : false
+    this.session.append('tool/call', {
+      turn,
+      step,
+      callId,
+      name: item.type,
+      arguments: toolArgumentsJson(item),
+    })
+    this.session.append('tool/result', {
+      turn,
+      step,
+      message: createToolResultMessage({
+        callId,
+        content: [{ type: 'text', text: toolOutputText(item) }],
+        isError: failed,
+      }),
+    }, { surfaceOp: 'append' })
   }
 
   private async runCodexStep(
@@ -471,7 +601,6 @@ export class CodexHarnessAgent implements Agent {
           }
           if (this.threadId === undefined) {
             this.threadId = event.thread_id
-            this.session.append('codex/thread', { threadId: event.thread_id })
           }
         } else if (event.type === 'item.started' || event.type === 'item.updated') {
           updateBlock(event.item, false)
@@ -482,7 +611,7 @@ export class CodexHarnessAgent implements Agent {
           }
         } else if (event.type === 'item.completed') {
           updateBlock(event.item, true)
-          this.session.append('codex/item', { turn, step, item: event.item })
+          this.projectToolItem(event.item, turn, step)
           if (event.item.type === 'todo_list') {
             this.session.append('todo/write', {
               todos: event.item.items.map(item => ({ content: item.text, status: item.completed ? 'completed' : 'pending' })),
@@ -505,13 +634,25 @@ export class CodexHarnessAgent implements Agent {
           appendChunk({ type: 'block-end', index: block.index, block: { type: block.type, text: block.text } })
         }
       }
+      const replayState = this.threadId === undefined ? undefined : codexReplayState(this.threadId)
+      appendChunk({
+        type: 'finish',
+        reason: signal.aborted
+          ? { kind: 'aborted', failure: { message: errorChain(error), code: 'CODEX_SDK' } }
+          : { kind: 'error', failure: { message: errorChain(error), code: 'CODEX_SDK' } },
+        ...(replayState === undefined ? {} : { replayState }),
+      })
       if (blocks.some(block => block.text.length > 0)) {
         this.session.append('assistant/message', {
           turn,
           step,
           message: createAssistantMessage({
             content: blocks.map(block => ({ type: block.type, text: block.text })),
-            source: { provider: 'codex', model: this.options.model ?? 'codex-default' },
+            source: {
+              provider: 'codex',
+              model: this.options.model ?? 'codex-default',
+              ...(replayState === undefined ? {} : { replayState }),
+            },
           }),
           interrupted: true,
         }, { surfaceOp: 'append', sourceEventSeqs: chunkSeqs })
@@ -528,13 +669,22 @@ export class CodexHarnessAgent implements Agent {
       }
     }
     if (usage !== undefined) appendChunk({ type: 'usage', usage })
-    appendChunk({ type: 'finish', reason: { kind: 'stop' } })
+    const replayState = this.threadId === undefined ? undefined : codexReplayState(this.threadId)
+    appendChunk({
+      type: 'finish',
+      reason: { kind: 'stop' },
+      ...(replayState === undefined ? {} : { replayState }),
+    })
     this.session.append('assistant/message', {
       turn,
       step,
       message: createAssistantMessage({
         content: blocks.map(block => ({ type: block.type, text: block.text })),
-        source: { provider: 'codex', model: this.options.model ?? 'codex-default' },
+        source: {
+          provider: 'codex',
+          model: this.options.model ?? 'codex-default',
+          ...(replayState === undefined ? {} : { replayState }),
+        },
       }),
       ...(usage === undefined ? {} : { usage }),
     }, { surfaceOp: 'append', sourceEventSeqs: chunkSeqs })
@@ -563,27 +713,34 @@ export class CodexHarnessFactory implements AgentFactory {
   private readonly teardown = new AbortController()
   private readonly live = new Set<() => Promise<void>>()
   private readonly codexPromise: Promise<CodexClientLike>
+  private readonly baseModel: ModelSelection | undefined
 
   constructor(
     private readonly ctx: Context,
     private readonly config: Config,
     codex?: CodexClientLike,
   ) {
+    this.baseModel = config.useBaseModel === false
+      ? undefined
+      : ctx.get('agentDefaultModel')?.currentSelection()
     this.codexPromise = codex === undefined ? this.buildCodex(ctx, config) : Promise.resolve(codex)
   }
 
   /** Construct the official SDK client, resolving the endpoint key per factory. */
   private async buildCodex(ctx: Context, config: Config): Promise<CodexClientLike> {
+    const base = this.baseModel
+    const apiKeyRef = config.apiKeyRef ?? (base?.provider === 'deepseek' ? DEEPSEEK_API_KEY_ENV : undefined)
     let apiKey: string | undefined
-    if (config.apiKeyRef !== undefined) {
+    if (apiKeyRef !== undefined) {
       const credentials = ctx.get('credentials')
       if (credentials !== undefined) {
-        const resolved = await credentials.resolve(credentialRef(config.apiKeyRef))
+        const resolved = await credentials.resolve(credentialRef(apiKeyRef))
         apiKey = resolved?.value
       }
     }
+    const baseUrl = config.baseUrl ?? (base?.provider === 'deepseek' ? DEEPSEEK_API_BASE : undefined)
     return new Codex({
-      ...(config.baseUrl === undefined ? {} : { baseUrl: config.baseUrl }),
+      ...(baseUrl === undefined ? {} : { baseUrl }),
       ...(apiKey === undefined ? {} : { apiKey }),
     })
   }
@@ -604,7 +761,15 @@ export class CodexHarnessFactory implements AgentFactory {
     if (callerSignal?.aborted) forwardCallerAbort()
     if (this.teardown.signal.aborted) forwardFactoryAbort()
 
-    const agent = new CodexHarnessAgent(this.ctx, id, options, session, this.codexPromise, this.config)
+    const agent = new CodexHarnessAgent(
+      this.ctx,
+      id,
+      options,
+      session,
+      this.codexPromise,
+      this.config,
+      this.baseModel,
+    )
     let detachSession: (() => void) | undefined
     let detachAgent: (() => void) | undefined
     let disposing: Promise<void> | undefined

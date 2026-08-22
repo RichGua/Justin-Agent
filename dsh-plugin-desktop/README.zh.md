@@ -20,9 +20,13 @@ Codex Harness 展示。内置 harness 使用稳定 ID `deepseek` 与 `codex`；�
 ### Codex Harness 配置
 
 `codex-harness` Loader 行通过普通 profile patch 或 `dsh-desktop` settings namespace
-提供配置。不配置时，它走官方 Codex CLI 的默认行为：`~/.codex/config.toml`、环境中的
-OpenAI 登录态，或 `CODEX_API_KEY`。要把它作为独立的 harness 接入任意 OpenAI 兼容
-端点，覆盖该行即可：
+提供配置。默认会复用 DSH 底座模型（`useBaseModel: true`）：harness 读取底座当前的
+模型选择（provider、model、推理强度），把 Codex CLI 指向对应的 Responses API 端点
+（DeepSeek 使用 `https://api.deepseek.com`），并通过 `ctx.credentials` 解析底座
+provider 的密钥引用（`DEEPSEEK_API_KEY`），因此无需单独配置 Codex 凭据。Codex 的
+工具执行会投影为会话中的普通工具调用与结果。
+
+显式配置的 `model`、`baseUrl` 或 `apiKeyRef` 始终优先于底座模型：
 
 ```yaml
 - id: codex-harness
@@ -30,11 +34,13 @@ OpenAI 登录态，或 `CODEX_API_KEY`。要把它作为独立的 harness 接入
     baseUrl: https://api.example.com/v1
     apiKeyRef: CODEX_API_KEY
     model: some-model-name
+    useBaseModel: false
 ```
 
-`baseUrl` 替换端点；`apiKeyRef` 指定一个 DSH credential 引用（即环境变量名），harness
-factory 启动时通过 `ctx.credentials` 解析其值，因此密钥无需写入 profile；`model`
-选择该端点使用的模型。当 `baseUrl` 与 `apiKeyRef` 都未设置时，沿用官方 Codex 默认。
+`baseUrl` 替换端点；`apiKeyRef` 指定该端点密钥所用的 credential 引用，harness
+factory 启动时通过 `ctx.credentials` 解析，密钥无需写入 profile。设置
+`useBaseModel: false` 可停止跟随底座模型。工具审批默认 `on-request`，可通过
+`approvalPolicy` 显式修改。
 
 Electron 可执行文件只包含最小启动代码。它获取单实例锁、解析当前选中的 DSH profile、提供原生运行时能力，并在 Electron main 进程中启动 Host Cordis 根。`desktop-shell` Host 插件通过 Cordis effect 拥有 `BrowserWindow`、导航策略、settings namespace，以及关闭与退出生命周期。原生 runtime 拥有实体托盘；`desktop-shell`、`desktop-profiles`、`desktop-terminal` 与 `desktop-updates` 则通过有序 item registry 提供 effect-scoped 命令。
 

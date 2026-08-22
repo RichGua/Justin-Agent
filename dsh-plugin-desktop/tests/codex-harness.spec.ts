@@ -63,12 +63,18 @@ class FakeCodex implements CodexClientLike {
   }
 }
 
-async function harness(codex = new FakeCodex()) {
+async function harness(
+  codex = new FakeCodex(),
+  baseModel?: { provider: string; model: string; reasoningEffort?: string },
+) {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
   let runtime!: Context
   await ctx.inject(['agents', 'sessions'], (child: Context) => { runtime = child })
+  if (baseModel !== undefined) {
+    runtime.provide('agentDefaultModel', { currentSelection: () => baseModel } as never)
+  }
   const factory = new CodexHarnessFactory(runtime, Config({}), codex)
   runtime.effect(() => runtime.agents.setFactory(factory))
   return { ctx, factory, codex }
@@ -94,16 +100,26 @@ describe('Codex Harness AgentFactory', () => {
     expect(test.codex.started).toEqual([expect.objectContaining({
       workingDirectory: 'C:\\workspace',
       sandboxMode: 'workspace-write',
-      approvalPolicy: 'never',
+      approvalPolicy: 'on-request',
       skipGitRepoCheck: true,
     })])
     expect(test.codex.threads[0]?.inputs).toEqual([[
       { type: 'text', text: 'Use the official SDK' },
     ]])
-    expect(handle.agent.session.events.find(event => event.type === 'codex/thread')?.data)
-      .toEqual({ threadId: 'codex-thread-1' })
+    expect(handle.agent.session.events.some(event => event.type.startsWith('codex/'))).toBe(false)
+    const finish = handle.agent.session.events.flatMap(event =>
+      event.type === 'assistant/chunk' && event.data.chunk.type === 'finish' ? [event.data.chunk] : [],
+    ).at(-1)
+    expect(finish?.replayState).toEqual({
+      response: {
+        kind: 'dsh-plugin-desktop/codex-thread',
+        version: 1,
+        threadId: 'codex-thread-1',
+      },
+    })
     const assistant = handle.agent.session.events.findLast(event => event.type === 'assistant/message')
     expect(assistant?.data.message.content).toEqual([{ type: 'text', text: 'Hello from Codex' }])
+    expect(assistant?.data.message.source.replayState).toEqual(finish?.replayState)
     expect(assistant?.data.usage).toEqual({
       inputTokens: 11,
       outputTokens: 5,
@@ -134,7 +150,40 @@ describe('Codex Harness AgentFactory', () => {
 
     expect(test.codex.started).toHaveLength(1)
     expect(test.codex.resumed).toEqual([expect.objectContaining({ id: 'codex-thread-1' })])
-    expect(second.agent.session.events.filter(event => event.type === 'codex/thread')).toHaveLength(1)
+    expect(second.agent.session.events.some(event => event.type.startsWith('codex/'))).toBe(false)
+
+    await second.dispose()
+    await test.factory.dispose()
+    await test.ctx.fiber.dispose()
+  })
+
+  it('resumes a thread recorded by the legacy Desktop-private event', async () => {
+    const test = await harness()
+    const id = SessionId('codex-session-legacy-resume')
+    const first = await test.ctx.agents.create({ sessionId: id })
+    first.agent.followup(prompt('Legacy first turn'))
+    await first.agent.whenIdle()
+    const seed = structuredClone(first.agent.session.events) as SessionEvent[]
+    for (const event of seed) {
+      if (event.type === 'assistant/message' && event.data.message.source.provider === 'codex') {
+        delete (event.data.message.source as { replayState?: unknown }).replayState
+      } else if (event.type === 'assistant/chunk' && event.data.chunk.type === 'finish') {
+        delete (event.data.chunk as { replayState?: unknown }).replayState
+      }
+    }
+    seed.push({
+      type: 'codex/thread',
+      seq: seed.length,
+      time: Date.now(),
+      data: { threadId: 'codex-thread-1' },
+    })
+    await first.dispose()
+
+    const second = await test.ctx.agents.create({ sessionId: id, seed })
+    second.agent.followup(prompt('Continue the legacy thread'))
+    await second.agent.whenIdle()
+
+    expect(test.codex.resumed).toEqual([expect.objectContaining({ id: 'codex-thread-1' })])
 
     await second.dispose()
     await test.factory.dispose()
@@ -161,6 +210,13 @@ describe('Codex Harness AgentFactory', () => {
 
     expect(handle.agent.session.events.findLast(event => event.type === 'turn/end')?.data.reason)
       .toEqual({ kind: 'error', error: { message: 'native Codex failure', code: 'CODEX_SDK' } })
+    const finish = handle.agent.session.events.flatMap(event =>
+      event.type === 'assistant/chunk' && event.data.chunk.type === 'finish' ? [event.data.chunk] : [],
+    ).at(-1)
+    expect(finish).toMatchObject({
+      reason: { kind: 'error', failure: { message: 'native Codex failure', code: 'CODEX_SDK' } },
+      replayState: { response: { threadId: 'failed-thread' } },
+    })
 
     await handle.dispose()
     await test.factory.dispose()
@@ -189,5 +245,90 @@ describe('Codex Harness AgentFactory', () => {
     await new Promise(resolveImmediate => setImmediate(resolveImmediate))
     await factory.dispose()
     await ctx.fiber.dispose()
+  })
+
+  it('reuses the DSH base model endpoint and key when useBaseModel is on', async () => {
+    const ctx = new Context()
+    const resolve = vi.fn(async () => ({ value: 'sk-base', source: 'env' }))
+    ctx.provide('credentials', { resolve } as never)
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-v4-flash', reasoningEffort: 'medium' }),
+    } as never)
+    const factory = new CodexHarnessFactory(ctx, Config({}))
+
+    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    // The base DeepSeek key reference is resolved automatically, no explicit apiKeyRef needed.
+    expect(resolve).toHaveBeenCalledOnce()
+    await factory.dispose()
+    await ctx.fiber.dispose()
+  })
+
+  it('uses the DSH base model id when no explicit Codex model is configured', async () => {
+    const test = await harness(new FakeCodex(), {
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      reasoningEffort: 'medium',
+    })
+    const handle = await test.ctx.agents.create({ sessionId: SessionId('codex-session-base-model') })
+
+    expect(handle.agent.options).toEqual({ provider: 'codex', model: 'deepseek-v4-flash' })
+
+    await handle.dispose()
+    await test.factory.dispose()
+    await test.ctx.fiber.dispose()
+  })
+
+  it('projects Codex tool items as DSH tool calls and results', async () => {
+    const codex = new FakeCodex()
+    vi.spyOn(codex, 'startThread').mockImplementation((options) => {
+      codex.started.push(options ?? {})
+      const thread = new FakeThread([
+        { type: 'thread.started', thread_id: 'tool-thread' },
+        { type: 'turn.started' },
+        {
+          type: 'item.started',
+          item: { id: 'cmd-1', type: 'command_execution', command: 'ls', aggregated_output: '', status: 'in_progress' },
+        },
+        {
+          type: 'item.completed',
+          item: { id: 'cmd-1', type: 'command_execution', command: 'ls', aggregated_output: 'file-a\nfile-b', exit_code: 0, status: 'completed' },
+        },
+        { type: 'item.completed', item: { id: 'ans-1', type: 'agent_message', text: 'done' } },
+        {
+          type: 'turn.completed',
+          usage: {
+            input_tokens: 1,
+            cached_input_tokens: 0,
+            cache_write_input_tokens: 0,
+            output_tokens: 1,
+            reasoning_output_tokens: 0,
+          },
+        },
+      ])
+      codex.threads.push(thread)
+      return thread
+    })
+    const test = await harness(codex)
+    const handle = await test.ctx.agents.create({ sessionId: SessionId('codex-session-tools') })
+
+    handle.agent.followup(prompt('run a command'))
+    await handle.agent.whenIdle()
+
+    const call = handle.agent.session.events.findLast(event => event.type === 'tool/call')
+    expect(call?.data).toMatchObject({
+      name: 'command_execution',
+      arguments: JSON.stringify({ command: 'ls' }),
+    })
+    const result = handle.agent.session.events.findLast(event => event.type === 'tool/result')
+    expect(result?.data.message.content).toEqual([{
+      type: 'tool-result',
+      toolCallId: expect.any(String),
+      content: [{ type: 'text', text: 'file-a\nfile-b' }],
+      isError: false,
+    }])
+
+    await handle.dispose()
+    await test.factory.dispose()
+    await test.ctx.fiber.dispose()
   })
 })
