@@ -276,12 +276,33 @@ describe('Codex Harness AgentFactory', () => {
     await ctx.fiber.dispose()
   })
 
-  it('builds the default official client when no endpoint or credentials service is configured', async () => {
+  it('fails loud instead of silently falling back to the OpenAI default endpoint', async () => {
     const ctx = new Context()
     const factory = new CodexHarnessFactory(ctx, Config({}))
 
-    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
-    await factory.dispose()
+    await expect(factory['codexPromise']).rejects.toThrow('no automatic Codex endpoint mapping')
+    await ctx.fiber.dispose()
+  })
+
+  it('fails loud when the base DeepSeek key is missing', async () => {
+    const ctx = new Context()
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }),
+    } as never)
+    const factory = new CodexHarnessFactory(ctx, Config({}))
+
+    await expect(factory['codexPromise']).rejects.toThrow('no API key found')
+    await ctx.fiber.dispose()
+  })
+
+  it('fails loud when the base provider has no automatic endpoint mapping', async () => {
+    const ctx = new Context()
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'anthropic', model: 'claude' }),
+    } as never)
+    const factory = new CodexHarnessFactory(ctx, Config({}))
+
+    await expect(factory['codexPromise']).rejects.toThrow('no automatic Codex endpoint mapping')
     await ctx.fiber.dispose()
   })
 

@@ -765,6 +765,24 @@ export class CodexHarnessFactory implements AgentFactory {
     const baseUrl = config.baseUrl
       ?? deepSeekSettings?.baseURL
       ?? (isDeepSeekBase ? DEEPSEEK_API_BASE : undefined)
+    if (config.useBaseModel !== false) {
+      // Never fall back to the OpenAI default endpoint silently: without an
+      // explicit baseUrl it requires ChatGPT credentials and fails with an
+      // opaque 403 in unsupported regions. Fail loud with the mapping instead.
+      if (baseUrl === undefined) {
+        throw new Error(
+          `codex-harness: the base model provider ${JSON.stringify(base?.provider ?? '(none)')} `
+          + 'has no automatic Codex endpoint mapping; configure baseUrl/apiKeyRef on the '
+          + 'codex-harness row, use a DeepSeek base model, or set useBaseModel: false',
+        )
+      }
+      if (apiKey === undefined) {
+        throw new Error(
+          `codex-harness: no API key found for ${JSON.stringify(apiKeyRef)}; `
+          + 'store it through the DSH credentials',
+        )
+      }
+    }
     return new Codex({
       ...(baseUrl === undefined ? {} : { baseUrl }),
       ...(apiKey === undefined ? {} : { apiKey }),
