@@ -17,6 +17,25 @@ Codex Harness 展示。内置 harness 使用稳定 ID `deepseek` 与 `codex`；�
 联动加载该组插件。每个 Loader 条目都属于某套 harness 或 `common` 通用组，通用组
 不受 harness 切换影响。
 
+### Codex Harness 配置
+
+`codex-harness` Loader 行通过普通 profile patch 或 `dsh-desktop` settings namespace
+提供配置。不配置时，它走官方 Codex CLI 的默认行为：`~/.codex/config.toml`、环境中的
+OpenAI 登录态，或 `CODEX_API_KEY`。要把它作为独立的 harness 接入任意 OpenAI 兼容
+端点，覆盖该行即可：
+
+```yaml
+- id: codex-harness
+  config:
+    baseUrl: https://api.example.com/v1
+    apiKeyRef: CODEX_API_KEY
+    model: some-model-name
+```
+
+`baseUrl` 替换端点；`apiKeyRef` 指定一个 DSH credential 引用（即环境变量名），harness
+factory 启动时通过 `ctx.credentials` 解析其值，因此密钥无需写入 profile；`model`
+选择该端点使用的模型。当 `baseUrl` 与 `apiKeyRef` 都未设置时，沿用官方 Codex 默认。
+
 Electron 可执行文件只包含最小启动代码。它获取单实例锁、解析当前选中的 DSH profile、提供原生运行时能力，并在 Electron main 进程中启动 Host Cordis 根。`desktop-shell` Host 插件通过 Cordis effect 拥有 `BrowserWindow`、导航策略、settings namespace，以及关闭与退出生命周期。原生 runtime 拥有实体托盘；`desktop-shell`、`desktop-profiles`、`desktop-terminal` 与 `desktop-updates` 则通过有序 item registry 提供 effect-scoped 命令。
 
 两种呈现模式都复用现有 loopback Web carrier。profile 挂载普通 `dsh-base` 与 `dsh-web-app` bundle；Host 把 HTTP 与 WebSocket surface 绑定到 `127.0.0.1` 的临时端口；Electron 在沙箱 renderer 中加载该同源页面。Electron 不维护自有插件 roster，不使用 preload bridge，renderer 也不会获得原始 Electron API。

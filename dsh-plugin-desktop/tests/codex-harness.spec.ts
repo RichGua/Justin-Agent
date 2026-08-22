@@ -166,4 +166,28 @@ describe('Codex Harness AgentFactory', () => {
     await test.factory.dispose()
     await test.ctx.fiber.dispose()
   })
+
+  it('accepts an independent endpoint and resolves its key through the credentials seam', async () => {
+    const ctx = new Context()
+    const resolve = vi.fn(async () => ({ value: 'sk-independent', source: 'env' }))
+    ctx.provide('credentials', { resolve } as never)
+    const factory = new CodexHarnessFactory(
+      ctx,
+      Config({ baseUrl: 'https://api.example.com/v1', apiKeyRef: 'CODEX_API_KEY' }),
+    )
+
+    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    expect(resolve).toHaveBeenCalledWith(expect.objectContaining({}))
+    await factory.dispose()
+    await ctx.fiber.dispose()
+  })
+
+  it('builds the default official client when no endpoint or credentials service is configured', async () => {
+    const ctx = new Context()
+    const factory = new CodexHarnessFactory(ctx, Config({}))
+
+    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    await factory.dispose()
+    await ctx.fiber.dispose()
+  })
 })

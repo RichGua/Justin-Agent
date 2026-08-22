@@ -46,6 +46,8 @@ import {
   type UserMessage,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type {} from '@deepseek-ai/dsh-credentials'
 import z from '@deepseek-ai/schemastery'
 import {
   Codex,
@@ -83,6 +85,10 @@ export interface Config {
   modelReasoningEffort?: ModelReasoningEffort
   networkAccessEnabled?: boolean
   webSearchMode?: WebSearchMode
+  /** OpenAI-compatible endpoint used instead of the Codex default; any base URL is valid. */
+  baseUrl?: string
+  /** Credential reference (environment-variable name) for the endpoint API key. */
+  apiKeyRef?: string
 }
 
 export const Config: z<Config> = z.object({
@@ -95,6 +101,8 @@ export const Config: z<Config> = z.object({
   modelReasoningEffort: z.union(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const),
   networkAccessEnabled: z.boolean(),
   webSearchMode: z.union(['disabled', 'cached', 'live'] as const),
+  baseUrl: z.string(),
+  apiKeyRef: z.string(),
 })
 
 /** Narrow official SDK faces used by the adapter and replaceable in tests. */
@@ -183,7 +191,7 @@ export class CodexHarnessAgent implements Agent {
     public readonly id: SessionId,
     requestedOptions: AgentOptions,
     public readonly session: Session,
-    private readonly codex: CodexClientLike,
+    private readonly codexPromise: Promise<CodexClientLike>,
     private readonly config: Config,
   ) {
     const requestedCodexModel = requestedOptions.provider === 'codex' ? requestedOptions.model : undefined
@@ -373,11 +381,12 @@ export class CodexHarnessAgent implements Agent {
     }
   }
 
-  private getThread(): CodexThreadLike {
+  private async getThread(): Promise<CodexThreadLike> {
     if (this.thread !== undefined) return this.thread
+    const codex = await this.codexPromise
     this.thread = this.threadId === undefined
-      ? this.codex.startThread(this.threadOptions())
-      : this.codex.resumeThread(this.threadId, this.threadOptions())
+      ? codex.startThread(this.threadOptions())
+      : codex.resumeThread(this.threadId, this.threadOptions())
     return this.thread
   }
 
@@ -453,7 +462,7 @@ export class CodexHarnessAgent implements Agent {
       }
     }
     try {
-      const { events } = await this.getThread().runStreamed(prepared.input, { signal })
+      const { events } = await (await this.getThread()).runStreamed(prepared.input, { signal })
       for await (const event of events) {
         signal.throwIfAborted()
         if (event.type === 'thread.started') {
@@ -553,12 +562,31 @@ async function awaitSetup(
 export class CodexHarnessFactory implements AgentFactory {
   private readonly teardown = new AbortController()
   private readonly live = new Set<() => Promise<void>>()
+  private readonly codexPromise: Promise<CodexClientLike>
 
   constructor(
     private readonly ctx: Context,
     private readonly config: Config,
-    private readonly codex: CodexClientLike = new Codex(),
-  ) {}
+    codex?: CodexClientLike,
+  ) {
+    this.codexPromise = codex === undefined ? this.buildCodex(ctx, config) : Promise.resolve(codex)
+  }
+
+  /** Construct the official SDK client, resolving the endpoint key per factory. */
+  private async buildCodex(ctx: Context, config: Config): Promise<CodexClientLike> {
+    let apiKey: string | undefined
+    if (config.apiKeyRef !== undefined) {
+      const credentials = ctx.get('credentials')
+      if (credentials !== undefined) {
+        const resolved = await credentials.resolve(credentialRef(config.apiKeyRef))
+        apiKey = resolved?.value
+      }
+    }
+    return new Codex({
+      ...(config.baseUrl === undefined ? {} : { baseUrl: config.baseUrl }),
+      ...(apiKey === undefined ? {} : { apiKey }),
+    })
+  }
 
   private prepare(
     ownerCtx: Context,
@@ -576,7 +604,7 @@ export class CodexHarnessFactory implements AgentFactory {
     if (callerSignal?.aborted) forwardCallerAbort()
     if (this.teardown.signal.aborted) forwardFactoryAbort()
 
-    const agent = new CodexHarnessAgent(this.ctx, id, options, session, this.codex, this.config)
+    const agent = new CodexHarnessAgent(this.ctx, id, options, session, this.codexPromise, this.config)
     let detachSession: (() => void) | undefined
     let detachAgent: (() => void) | undefined
     let disposing: Promise<void> | undefined

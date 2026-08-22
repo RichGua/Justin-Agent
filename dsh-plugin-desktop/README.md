@@ -20,6 +20,28 @@ Loader row and a plugin set that loads when that harness becomes primary. Every
 Loader entry belongs to one harness or to the `common` group, which is never
 affected by harness switches.
 
+### Codex Harness configuration
+
+The `codex-harness` Loader row takes its values from the ordinary profile patch
+or the `dsh-desktop` settings namespace. Without configuration it runs through
+the official Codex CLI defaults: `~/.codex/config.toml`, the ambient OpenAI
+login, or `CODEX_API_KEY`. To use it as an independent harness against any
+OpenAI-compatible endpoint, override the row:
+
+```yaml
+- id: codex-harness
+  config:
+    baseUrl: https://api.example.com/v1
+    apiKeyRef: CODEX_API_KEY
+    model: some-model-name
+```
+
+`baseUrl` replaces the endpoint. `apiKeyRef` names a DSH credential reference
+(an environment-variable name) whose value is resolved through
+`ctx.credentials` when the harness factory starts, so the key never has to be
+written into the profile; `model` selects the model for that endpoint. When
+neither `baseUrl` nor `apiKeyRef` is set, the official Codex defaults apply.
+
 The Electron executable is minimal bootstrap code. It acquires the single-instance lock, resolves the selected DSH profile, provides the native runtime capability, and boots the Host Cordis root in the Electron main process. The `desktop-shell` Host plugin owns the `BrowserWindow`, navigation policy, settings namespace, and close-versus-quit lifecycle through Cordis effects. The native runtime owns the physical tray, while `desktop-shell`, `desktop-profiles`, `desktop-terminal`, and `desktop-updates` contribute effect-scoped commands through its ordered item registry.
 
 Both presentation modes reuse the existing loopback Web carrier. The profile mounts the ordinary `dsh-base` and `dsh-web-app` bundles, the Host binds its HTTP and WebSocket surface to `127.0.0.1` on an ephemeral port, and Electron loads that same-origin page in a sandboxed renderer. There is no Electron-owned plugin roster, preload bridge, or raw Electron API in the renderer.
