@@ -16,7 +16,7 @@ const candidate = (overrides: Partial<MarketMediaCandidate> = {}): MarketMediaCa
   role: 'publisher-avatar',
   alt: 'Anywhere Labs',
   sourceRecordId: '018f1f77-a5c4-7b73-a9ae-0242ac120002',
-  itemId: 'anywhere-labs/deepseek-harness-desktop',
+  itemId: 'RichGua/Rundeep',
   allowedHostnames: ['github.com', 'avatars.githubusercontent.com'],
   ...overrides,
 })

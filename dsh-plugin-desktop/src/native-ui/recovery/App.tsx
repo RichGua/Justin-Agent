@@ -147,7 +147,7 @@ interface Copy {
 
 const COPY: Record<Locale, Copy> = {
   en: {
-    title: 'RunDeep Recovery',
+    title: 'Rundeep Recovery',
     lead: 'The active Profile could not start. Diagnose the problem, restore a healthy configuration, or choose another Profile.',
     currentProfile: 'Current',
     startupError: 'Startup error',
@@ -183,7 +183,7 @@ const COPY: Record<Locale, Copy> = {
     showDiagnostics: 'Show diagnostics',
     privacy: 'Diagnostic archives may contain local paths, logs, system information, and crash-memory fragments. Review them before sharing.',
     manualConfiguration: 'Configuration files',
-    manualConfigurationBody: 'Open only the active Profile paths selected by RunDeep.',
+    manualConfigurationBody: 'Open only the active Profile paths selected by Rundeep.',
     openSettingsDocument: 'Open configuration file',
     openProfilePatch: 'Edit patch',
     openProfileManifest: 'Edit manifest',
@@ -192,9 +192,9 @@ const COPY: Record<Locale, Copy> = {
     profilesBody: 'Switch to another healthy Profile or create a new one without starting the plugin Host.',
     switchProfile: 'Switch',
     addProfile: 'Add Profile',
-    openTerminal: 'Open RunDeep Terminal',
+    openTerminal: 'Open Rundeep Terminal',
     restoreLastSuccessful: 'Restore last successful Profile',
-    restart: 'Restart RunDeep',
+    restart: 'Restart Rundeep',
     quit: 'Quit',
     cancel: 'Cancel',
     confirmDisable: 'Disable this plugin?',
@@ -206,7 +206,7 @@ const COPY: Record<Locale, Copy> = {
     working: 'Applying the recovery action…',
   },
   zh: {
-    title: 'RunDeep 恢复助手',
+    title: 'Rundeep 恢复助手',
     lead: '当前配置无法启动。你可以诊断问题、恢复健康配置，或切换到其他配置。',
     currentProfile: '当前',
     startupError: '启动错误',
@@ -242,7 +242,7 @@ const COPY: Record<Locale, Copy> = {
     showDiagnostics: '显示诊断文件',
     privacy: '诊断包可能包含本地路径、日志、系统信息和崩溃内存片段，分享前请先检查。',
     manualConfiguration: '配置文件',
-    manualConfigurationBody: '只打开由 RunDeep 确认的当前配置路径。',
+    manualConfigurationBody: '只打开由 Rundeep 确认的当前配置路径。',
     openSettingsDocument: '打开配置文件',
     openProfilePatch: '编辑补丁',
     openProfileManifest: '编辑清单',
@@ -251,9 +251,9 @@ const COPY: Record<Locale, Copy> = {
     profilesBody: '无需启动插件 Host，即可切换到其他健康配置或创建新配置。',
     switchProfile: '切换',
     addProfile: '新增配置',
-    openTerminal: '打开 RunDeep 终端',
+    openTerminal: '打开 Rundeep 终端',
     restoreLastSuccessful: '恢复上次成功启动的配置',
-    restart: '重新启动 RunDeep',
+    restart: '重新启动 Rundeep',
     quit: '退出',
     cancel: '取消',
     confirmDisable: '确认禁用这个插件？',
@@ -382,7 +382,7 @@ function RecoveryContent({ state, copy }: { readonly state: RecoveryState; reado
 
 export function RecoveryApp(): JSX.Element {
   const state = decodeState()
-  if (state === undefined) return <main className="flex min-h-screen items-center justify-center p-6"><Alert variant="destructive"><AlertTriangle /><AlertTitle>RunDeep Recovery</AlertTitle><AlertDescription>The recovery state could not be read. Quit and start RunDeep again.</AlertDescription></Alert></main>
+  if (state === undefined) return <main className="flex min-h-screen items-center justify-center p-6"><Alert variant="destructive"><AlertTriangle /><AlertTitle>Rundeep Recovery</AlertTitle><AlertDescription>The recovery state could not be read. Quit and start Rundeep again.</AlertDescription></Alert></main>
   const copy = COPY[state.locale]
   return <main className={cn('h-screen overflow-hidden p-5 sm:p-7', state.busy && 'pointer-events-none opacity-70')}><div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
     <header className="shrink-0 space-y-2"><h1 className="text-2xl font-semibold tracking-tight">{copy.title}</h1><p className="text-sm leading-relaxed text-muted-foreground">{copy.lead}</p>{state.snapshot === undefined ? null : <p className="text-xs text-muted-foreground">{copy.currentProfile}: {state.snapshot.profileName}</p>}</header>

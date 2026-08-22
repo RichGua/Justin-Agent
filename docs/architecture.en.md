@@ -1,8 +1,8 @@
-# RunDeep Architecture
+# Rundeep Architecture
 
 ## Overview
 
-RunDeep is a thin Electron host. It starts the official DSH Host in Electron's main process; the Host exposes the ordinary Web UI over loopback HTTP/WebSocket. Desktop does not create a second renderer IPC plugin system and does not expose raw Electron APIs to the page.
+Rundeep is a thin Electron host. It starts the official DSH Host in Electron's main process; the Host exposes the ordinary Web UI over loopback HTTP/WebSocket. Desktop does not create a second renderer IPC plugin system and does not expose raw Electron APIs to the page.
 
 ```mermaid
 flowchart LR

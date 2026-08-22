@@ -1,31 +1,31 @@
-<h1 align="center">RunDeep</h1>
+<h1 align="center">Rundeep</h1>
 
 <p align="center">
-  <strong>基于可组合 Harness 的 Windows 和 macOS 开源桌面智能体客户端。</strong><br>
-  一键下载，开箱即用。<br>
+  <strong>面向 Windows 和 macOS 的开源桌面智能体工作台。</strong><br>
+  多 Harness 引擎、原生桌面体验、插件市场与可组合工作流。<br>
   万物皆「插件」，桌面本身也是「插件」。
 </p>
 
-<p align="center"><sub>独立的社区开源项目，与深度求索不存在隶属、合作、授权或背书关系。<br>本仓库目前无深度求索员工或 DeepSeek Harness 上游官方团队成员参与；GitHub Contributors 中显示的上游贡献者来自 fork 继承和同步的提交历史。<br>中文 · <a href="README.en.md">English</a></sub></p>
+<p align="center"><sub>Rundeep 由社区独立开发，基于 DeepSeek Harness 与开放源代码生态构建。<br>中文 · <a href="README.en.md">English</a></sub></p>
 
 <p align="center">
-  <img src="dsh-plugin-desktop/build/app-icon.png" alt="RunDeep 品牌标识" width="220">
+  <img src="dsh-plugin-desktop/build/app-icon.png" alt="Rundeep 品牌标识" width="220">
 </p>
 
 <p align="center">
-  <a href="https://github.com/anywhere-labs/deepseek-harness-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/anywhere-labs/deepseek-harness-desktop?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
-  <a href="https://github.com/anywhere-labs/deepseek-harness-desktop/releases"><img src="https://img.shields.io/github/downloads/anywhere-labs/deepseek-harness-desktop/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
-  <a href="https://github.com/anywhere-labs/deepseek-harness-desktop"><img src="https://img.shields.io/github/stars/anywhere-labs/deepseek-harness-desktop?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub stars"></a>
+  <a href="https://github.com/RichGua/Rundeep/releases/latest"><img src="https://img.shields.io/github/v/release/RichGua/Rundeep?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
+  <a href="https://github.com/RichGua/Rundeep/releases"><img src="https://img.shields.io/github/downloads/RichGua/Rundeep/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
+  <a href="https://github.com/RichGua/Rundeep"><img src="https://img.shields.io/github/stars/RichGua/Rundeep?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
   <a href="https://discord.gg/TJeGqKRNM"><img src="https://img.shields.io/badge/Discord-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" alt="Join Discord"></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows-4493F8?style=flat-square" alt="Supported platforms: macOS and Windows">
 </p>
 
 <p align="center">
-  <img src="assets/desktop-preview.png" alt="RunDeep 界面预览" width="100%">
+  <img src="assets/desktop-preview.png" alt="Rundeep 界面预览" width="100%">
 </p>
 
-RunDeep 将 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的本地 Web UI、Host 服务和插件系统集成到原生桌面应用中。项目固定并原样运行特定上游版本；RunDeep 提供窗口、托盘、终端、更新和工作配置，并通过 DeepSeek Harness 提供的插件机制与上游能力组合。
+Rundeep 把可组合的智能体运行时带进原生桌面：内置 DeepSeek Harness 与 Codex Harness 引擎切换、工作区与会话、原生窗口、托盘和终端，以及 Profile 管理、更新恢复和插件市场。项目固定并原样运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 作为智能体与插件基础，并使用 Electron、Cordis、React、TypeScript 和 OpenAI Codex SDK 构建 Rundeep 自有的桌面与多引擎能力。
 
 <a id="run"></a>
 
@@ -36,7 +36,7 @@ RunDeep 将 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 | 平台 | 下载 | 安装方式 |
 | --- | --- | --- |
 | Windows x64 | [下载安装程序](https://www.dshdesktop.cn/api/downloads/windows) | 运行 NSIS 安装程序并按提示完成安装 |
-| macOS Universal | [下载 DMG](https://www.dshdesktop.cn/api/downloads/mac) | 打开 DMG，将 RunDeep 拖入 Applications |
+| macOS Universal | [下载 DMG](https://www.dshdesktop.cn/api/downloads/mac) | 打开 DMG，将 Rundeep 拖入 Applications |
 
 详细步骤、插件命令和故障排查见[用户指南](docs/user-guide.md)与[常见问题](docs/faq.md)。
 
@@ -52,7 +52,7 @@ RunDeep 将 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 | --- | --- |
 | 安装和日常使用 | [用户指南](docs/user-guide.md) |
 | 快速确认平台、环境和使用边界 | [常见问题](docs/faq.md) |
-| 了解项目为什么存在 | [为什么做 RunDeep](docs/why-desktop.md) |
+| 了解项目为什么存在 | [为什么做 Rundeep](docs/why-desktop.md) |
 | 查看全部文档与 README 分工 | [文档索引](docs/README.md) |
 
 ### 开发者与维护者文档
@@ -88,7 +88,7 @@ RunDeep 将 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
     </td>
     <td width="50%" valign="top">
       <h3>共建插件生态</h3>
-      <p>DSH 的插件生态由社区共同建设。上游插件、RunDeep 插件和其他社区插件遵循统一的约定，可以通过相同的组合机制共同工作；欢迎加入共建，详见 <a href="docs/plugin-ecosystem.md">DSH 插件生态倡议书</a>。</p>
+      <p>DSH 的插件生态由社区共同建设。上游插件、Rundeep 插件和其他社区插件遵循统一的约定，可以通过相同的组合机制共同工作；欢迎加入共建，详见 <a href="docs/plugin-ecosystem.md">DSH 插件生态倡议书</a>。</p>
     </td>
   </tr>
 </table>
@@ -97,39 +97,27 @@ RunDeep 将 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 
 插件是给 DSH 添加能力的扩展包——模型、工具、界面、工作流都可以做成插件，像搭积木一样自由组合。
 
-RunDeep 没有修改上游源码，也不是一个固定写死的外壳。固定版本的上游 DeepSeek Harness 原样运行；桌面壳本身——窗口、托盘、终端、更新、工作配置——作为 DSH 插件接入，并通过 DeepSeek Harness 提供的插件机制与上游能力组合进同一个运行时。从核心 agent 到桌面外壳，整个产品遵守同一条"一切皆插件"的规则：与所固定上游版本兼容的插件可以使用，桌面能力也按插件的方式组合、替换和演进。
+Rundeep 没有修改上游源码，也不是一个固定写死的外壳。固定版本的上游 DeepSeek Harness 原样运行；桌面壳本身——窗口、托盘、终端、更新、工作配置——作为 DSH 插件接入，并通过 DeepSeek Harness 提供的插件机制与上游能力组合进同一个运行时。从核心 agent 到桌面外壳，整个产品遵守同一条"一切皆插件"的规则：与所固定上游版本兼容的插件可以使用，桌面能力也按插件的方式组合、替换和演进。
 
 我们希望插件生态像手机应用一样：每个插件按同一套规则开发，装在一起也能一起工作、互不干扰。
 
 ### 给开发者
 
-与许多其他项目不同，这个项目本身就是一个 DSH [插件](docs/plugin-development.md)：桌面壳与第三方插件使用相同的插件组合机制。Desktop 的插件能力已经可以使用。我们提供了 Desktop 服务，让插件开发者能够把插件与桌面能力集成起来：例如查看和切换工作配置，或在当前配置中安装、更新和移除插件。完整用法见[桌面插件接口说明](dsh-plugin-desktop/docs/plugin-services.zh.md)。为什么选择这样的边界、哪些能力不会暴露给第三方插件，见[为什么做 RunDeep](docs/why-desktop.md)和[插件开发指南](docs/plugin-development.md)。
+与许多其他项目不同，这个项目本身就是一个 DSH [插件](docs/plugin-development.md)：桌面壳与第三方插件使用相同的插件组合机制。Desktop 的插件能力已经可以使用。我们提供了 Desktop 服务，让插件开发者能够把插件与桌面能力集成起来：例如查看和切换工作配置，或在当前配置中安装、更新和移除插件。完整用法见[桌面插件接口说明](dsh-plugin-desktop/docs/plugin-services.zh.md)。为什么选择这样的边界、哪些能力不会暴露给第三方插件，见[为什么做 Rundeep](docs/why-desktop.md)和[插件开发指南](docs/plugin-development.md)。
 
-## 与 DeepSeek Harness 的关系
+## 开源基础与 Rundeep 特色
 
-RunDeep 是基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 和 Cordis 插件思想构建的独立社区项目，旨在提供开放、可组合的 DSH 桌面体验。
+Rundeep 站在成熟的开放源代码生态之上：[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供智能体、模型、工具、会话、工作流、Web UI 与插件基础；[Cordis](https://github.com/cordiverse/cordis) 提供可组合的服务与插件模型；Electron、React 和 TypeScript 构成原生桌面与界面层；OpenAI Codex SDK 用于 Rundeep 的 Codex Harness 引擎。
 
-本仓库由社区独立维护，目前不存在深度求索员工或 DeepSeek Harness 上游官方团队成员参与本项目开发、维护或治理的情形。GitHub Contributors 页面中可能出现的上游贡献者，来自本仓库 fork 时继承及后续同步的上游提交历史；该署名仅反映提交来源，不代表相关人员参与本仓库，也不构成任何隶属、合作、授权或背书关系。
+Rundeep 在这些基础上重点打造自己的产品体验：
 
-上游项目提供核心的智能体能力、插件系统和 Web UI；RunDeep 主要负责：
+- DeepSeek Harness 与 Codex Harness 一键切换，并复用端点和凭据配置
+- 原生窗口、托盘、终端、本地服务生命周期和跨平台安装包
+- 可组合 Profile、启动恢复、更新恢复、诊断导出和安全回滚
+- 内置开放插件市场，以及面向桌面插件的服务接口
+- 固定且不修改的 DeepSeek Harness 上游版本，兼顾插件兼容与后续升级
 
-- 桌面应用封装
-- 本地服务的启动、停止与恢复
-- 桌面窗口和系统托盘集成
-- macOS、Windows 安装包构建与发布
-- 更适合桌面使用的界面体验
-
-如果你希望通过命令行运行 DeepSeek Harness，或者参与其核心功能开发，请优先查看上游仓库。
-
-## 特别感谢
-
-特别感谢 [DeepSeek Harness 原始仓库](https://github.com/deepseek-ai/deepseek-harness) 和 DeepSeek AI 团队。RunDeep 基于固定版本的上游源码构建，核心的智能体、模型、工具、会话、Web UI 和插件生态都来自这个项目。
-
-同时感谢 [Cordis](https://github.com/cordiverse/cordis) 项目提供的插件化基础。没有这些开源项目，就不会有 RunDeep。
-
-也感谢 [Koishi.js](https://koishi.chat/) 项目和社区长期积累的插件化实践、工具与经验，以及所有参与讨论、测试、反馈和插件开发的社区成员。
-
-以及每一个使用、支持和参与共建的你。
+Rundeep 自有代码遵循 MIT License；所使用的第三方组件保留各自版权和开源许可证，完整清单见 [THIRD_PARTY_NOTICES.md](dsh-plugin-desktop/THIRD_PARTY_NOTICES.md)。
 
 <a id="run-from-source"></a>
 
@@ -158,13 +146,13 @@ headless 检查使用 `corepack yarn check`；完整的构建、测试和发布�
   </thead>
   <tbody>
     <tr>
-      <td align="center"><img src="assets/community-wechat-group.png" alt="RunDeep 企业微信二维码" title="扫码添加企业微信" width="180" height="180"></td>
-      <td align="center"><img src="assets/community-qq-group.jpg" alt="RunDeep QQ群二维码" width="180" height="180"></td>
+      <td align="center"><img src="assets/community-wechat-group.png" alt="Rundeep 企业微信二维码" title="扫码添加企业微信" width="180" height="180"></td>
+      <td align="center"><img src="assets/community-qq-group.jpg" alt="Rundeep QQ群二维码" width="180" height="180"></td>
     </tr>
   </tbody>
 </table>
 
-Discord：[加入 RunDeep 社区](https://discord.gg/TJeGqKRNM)
+Discord：[加入 Rundeep 社区](https://discord.gg/TJeGqKRNM)
 
 如果您希望加入我们的技术团队，也欢迎通过 [t4wefan@qq.com](mailto:t4wefan@qq.com) 联系我们。
 
@@ -190,24 +178,18 @@ Discord：[加入 RunDeep 社区](https://discord.gg/TJeGqKRNM)
 | Awesome DeepSeek Harness | DeepSeek Harness 插件、工具与基础设施精选列表。 | [GitHub](https://github.com/0xsline/awesome-deepseek-harness) · [官网](https://deepseekdocs.com/) |
 | MkSaaS · TanStarter | 面向独立开发者的商业 SaaS 启动模板。MkSaaS 基于 Next.js，TanStarter 基于 TanStack Start 与 Cloudflare，内置 AI、认证、支付和后台等常用能力。 | [MkSaaS](https://mksaas.com) · [TanStarter](https://tanstarter.dev) |
 
-<sub>如果希望收录您的项目，欢迎加入微信群并私信 @王博升Benson，或联系 t4wefan@qq.com，或<a href="https://github.com/anywhere-labs/deepseek-harness-desktop/issues">提出 issue</a>。</sub>
+<sub>如果希望收录您的项目，欢迎加入微信群并私信 @王博升Benson，或联系 t4wefan@qq.com，或<a href="https://github.com/RichGua/Rundeep/issues">提出 issue</a>。</sub>
 
 ## License
 
-本项目遵循 [MIT License](LICENSE)。
-
-> “DeepSeek Harness”是深度求索公司的注册商标。本文仅为准确说明兼容性、技术来源及与上游软件的关系而使用该名称。
-
-> 本项目完全开源免费。如果有人向您以任何形式出售此软件，请拒绝交易。
-
-> RunDeep 是独立的社区项目，与深度求索不存在隶属、合作、授权或背书关系。
+Rundeep 自有代码遵循 [MIT License](LICENSE)。内置第三方组件保留各自版权与许可证，详见 [THIRD_PARTY_NOTICES.md](dsh-plugin-desktop/THIRD_PARTY_NOTICES.md)。项目名称仅用于说明技术依赖与兼容性。
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=anywhere-labs%2Fdeepseek-harness-desktop&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=RichGua%2FRundeep&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=anywhere-labs/deepseek-harness-desktop&type=date&theme=dark&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=anywhere-labs/deepseek-harness-desktop&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=anywhere-labs/deepseek-harness-desktop&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=RichGua/Rundeep&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=RichGua/Rundeep&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=RichGua/Rundeep&type=date&legend=top-left" />
  </picture>
 </a>

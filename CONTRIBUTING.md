@@ -1,10 +1,10 @@
 # 参与贡献
 
-感谢你愿意参与 RunDeep。这是一个社区项目，无论你是普通用户、插件作者还是开发者，都有适合你的贡献方式。
+感谢你愿意参与 Rundeep。这是一个社区项目，无论你是普通用户、插件作者还是开发者，都有适合你的贡献方式。
 
 ## 普通用户：使用、反馈与传播
 
-- 遇到问题或异常，[提 issue](https://github.com/anywhere-labs/deepseek-harness-desktop/issues)：说明操作系统（macOS / Windows）、应用版本和复现步骤。
+- 遇到问题或异常，[提 issue](https://github.com/RichGua/Rundeep/issues)：说明操作系统（macOS / Windows）、应用版本和复现步骤。
 - 有功能想法或改进建议，也欢迎提 issue 讨论。
 - 参与[社区交流](README.md#社区交流)（微信群、QQ 群、Discord），帮助其他用户解决问题。
 - 写使用教程、体验文章，或帮助完善和翻译文档。

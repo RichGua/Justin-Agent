@@ -1,5 +1,5 @@
 # Third-Party Notices
-RunDeep distributes the following third-party packages inside its installers.
+Rundeep distributes the following third-party packages inside its installers.
 Each package ships with its own license text in the application files; this list records
 the package names, versions, and licenses for transparency.
 | Package | Version | License |

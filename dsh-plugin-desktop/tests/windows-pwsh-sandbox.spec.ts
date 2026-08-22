@@ -23,9 +23,9 @@ function shellSpec(env?: Record<string, string>): ShellExecSpec {
 const adaptation: WindowsAclAdaptation = {
   platform: 'win32',
   electron: true,
-  execPath: 'C:\\Program Files\\RunDeep\\RunDeep.exe',
-  upstreamRunner: 'C:\\Program Files\\RunDeep\\resources\\app.asar\\runner.js',
-  trampoline: 'C:\\Program Files\\RunDeep\\resources\\app.asar\\desktop-runner.js',
+  execPath: 'C:\\Program Files\\Rundeep\\Rundeep.exe',
+  upstreamRunner: 'C:\\Program Files\\Rundeep\\resources\\app.asar\\runner.js',
+  trampoline: 'C:\\Program Files\\Rundeep\\resources\\app.asar\\desktop-runner.js',
 }
 
 describe('Windows Electron PowerShell sandbox adaptation', () => {

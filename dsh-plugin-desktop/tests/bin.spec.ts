@@ -9,6 +9,7 @@ import {
   parseDesktopCli,
   runDesktopCli,
 } from '../src/bin.ts'
+import { selectDesktopUserDataDirectory } from '../src/desktop-user-data.ts'
 
 vi.mock('electron', () => ({ default: undefined }))
 
@@ -32,16 +33,24 @@ describe('desktop npm launcher', () => {
   })
 
   it('names the installed product and selected profile behavior', () => {
-    expect(DESKTOP_CLI_HELP).toContain('RunDeep')
+    expect(DESKTOP_CLI_HELP).toContain('Rundeep')
     expect(DESKTOP_CLI_HELP).toContain('selected Web-capable profile')
     expect(DESKTOP_CLI_HELP).toContain('--export-diagnostics')
   })
 
   it('resolves the packaged Desktop user-data directory without Electron', () => {
     expect(defaultDesktopUserDataDirectory('win32', { APPDATA: 'C:\\Users\\Example\\AppData\\Roaming' }, 'ignored'))
-      .toBe('C:\\Users\\Example\\AppData\\Roaming\\RunDeep')
+      .toBe('C:\\Users\\Example\\AppData\\Roaming\\Rundeep')
     expect(defaultDesktopUserDataDirectory('darwin', {}, '/Users/example'))
-      .toBe('/Users/example/Library/Application Support/RunDeep')
+      .toBe('/Users/example/Library/Application Support/Rundeep')
+  })
+
+  it('keeps existing RunDeep user data during the Rundeep brand transition', () => {
+    const primary = 'C:\\Users\\Example\\AppData\\Roaming\\Rundeep'
+    const legacy = 'C:\\Users\\Example\\AppData\\Roaming\\RunDeep'
+    expect(selectDesktopUserDataDirectory(primary, legacy, path => path === legacy)).toBe(legacy)
+    expect(selectDesktopUserDataDirectory(primary, legacy, path => path === primary)).toBe(primary)
+    expect(selectDesktopUserDataDirectory(primary, legacy, () => false)).toBe(primary)
   })
 
   it('exports diagnostics without launching Electron', async () => {

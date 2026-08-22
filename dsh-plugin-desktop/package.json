@@ -1,14 +1,14 @@
 {
   "name": "dsh-plugin-desktop",
   "version": "2.0.2",
-  "description": "RunDeep: a composable desktop AI harness",
+  "description": "Rundeep: a composable desktop AI harness",
   "license": "MIT",
   "publishConfig": {
     "registry": "https://registry.npmjs.org"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anywhere-labs/deepseek-harness-desktop.git",
+    "url": "git+https://github.com/RichGua/Rundeep.git",
     "directory": "dsh-plugin-desktop"
   },
   "type": "module",
@@ -291,7 +291,7 @@
   },
   "build": {
     "appId": "com.rundeep.desktop",
-    "productName": "RunDeep",
+    "productName": "Rundeep",
     "asar": true,
     "asarUnpack": [
       "package.json",
@@ -353,7 +353,7 @@
           ]
         }
       ],
-      "artifactName": "RunDeep-${version}-${arch}-Portable.${ext}",
+      "artifactName": "Rundeep-${version}-${arch}-Portable.${ext}",
       "icon": "build/app-icon.ico"
     },
     "nsis": {
@@ -365,9 +365,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "differentialPackage": false,
-      "shortcutName": "RunDeep",
+      "shortcutName": "Rundeep",
       "useZip": true,
-      "artifactName": "RunDeep-${version}-${arch}-Setup.${ext}"
+      "artifactName": "Rundeep-${version}-${arch}-Setup.${ext}"
     },
     "linux": {
       "target": [

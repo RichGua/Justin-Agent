@@ -1,16 +1,16 @@
-# RunDeep FAQ
+# Rundeep FAQ
 
 [中文](faq.md)
 
-This page answers common questions about installation, supported platforms, the bundled runtime, and plugins in the current stable release. The [latest GitHub Release](https://github.com/anywhere-labs/deepseek-harness-desktop/releases/latest) and [user guide](user-guide.en.md) define the shipped product scope.
+This page answers common questions about installation, supported platforms, the bundled runtime, and plugins in the current stable release. The [latest GitHub Release](https://github.com/RichGua/Rundeep/releases/latest) and [user guide](user-guide.en.md) define the shipped product scope.
 
-## What is RunDeep?
+## What is Rundeep?
 
-RunDeep is an open-source DeepSeek Harness desktop client for Windows and macOS. It packages the official Harness local Web UI, Host service, and plugin system into a native desktop application with a window, system tray, terminal, updates, and profile management.
+Rundeep is an open-source DeepSeek Harness desktop client for Windows and macOS. It packages the official Harness local Web UI, Host service, and plugin system into a native desktop application with a window, system tray, terminal, updates, and profile management.
 
 ## Is this an official DeepSeek product?
 
-No. RunDeep is an independent, community-maintained open-source project. It is not affiliated with or endorsed by DeepSeek. The name only describes its technical relationship with the official [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
+No. Rundeep is an independent, community-maintained open-source project. It is not affiliated with or endorsed by DeepSeek. The name only describes its technical relationship with the official [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
 ## Which operating systems are supported?
 
@@ -24,7 +24,7 @@ No. The installer includes Electron, Node.js, pnpm, and pinned DSH dependencies.
 
 No separate Node.js or Harness core download is required. The installer is larger because it contains the runtime and pinned dependencies, trading download size for a more deterministic first launch and dependency set. Cloud models, update checks, and new-version downloads still require network access.
 
-## Does RunDeep modify official Harness?
+## Does Rundeep modify official Harness?
 
 No. The repository pins an unmodified official Harness checkout. Compatibility mode runs the upstream default Web client. Advanced mode adds Desktop-owned layout and native window presentation through plugins without editing upstream source.
 
@@ -34,7 +34,7 @@ The Desktop Host, profiles, and DSH home live on the local machine. Whether cont
 
 ## Can I install DSH plugins?
 
-Yes. RunDeep uses the official Harness plugin system. Open RunDeep Terminal from the tray and run `dsh plugin add`, `dsh plugin remove`, or `dsh plugin update`. These commands default to the active profile, and Desktop must be restarted after plugin changes.
+Yes. Rundeep uses the official Harness plugin system. Open Rundeep Terminal from the tray and run `dsh plugin add`, `dsh plugin remove`, or `dsh plugin update`. These commands default to the active profile, and Desktop must be restarted after plugin changes.
 
 ## Does the Desktop profile automatically sync with an existing web profile?
 
@@ -46,4 +46,4 @@ Packaged applications check for stable releases in the background but never inst
 
 ## Where can I download the app or report a problem?
 
-Download from the [project download page](https://www.dshdesktop.cn/) or the [latest GitHub Release](https://github.com/anywhere-labs/deepseek-harness-desktop/releases/latest). Check the [troubleshooting section](user-guide.en.md#troubleshooting) first. If the problem remains, open a [GitHub Issue](https://github.com/anywhere-labs/deepseek-harness-desktop/issues/new/choose) with the operating system, app version, reproduction steps, and error details.
+Download from the [project download page](https://www.dshdesktop.cn/) or the [latest GitHub Release](https://github.com/RichGua/Rundeep/releases/latest). Check the [troubleshooting section](user-guide.en.md#troubleshooting) first. If the problem remains, open a [GitHub Issue](https://github.com/RichGua/Rundeep/issues/new/choose) with the operating system, app version, reproduction steps, and error details.

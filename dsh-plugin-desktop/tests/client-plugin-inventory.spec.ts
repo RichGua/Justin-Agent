@@ -62,7 +62,7 @@ function renderInventory(client: ReturnType<typeof api>, desktopSettings = setti
   } as never))
 }
 
-describe('RunDeep Harness plugin inventory', () => {
+describe('Rundeep Harness plugin inventory', () => {
   it('shows the three built-in groups and a segmented engine switch', async () => {
     const client = api()
     renderInventory(client)

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="RunDeep">
-  <!-- RunDeep: a calm, flat depth mark built to remain legible at tray-icon sizes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Rundeep">
+  <!-- Rundeep: a calm, flat depth mark built to remain legible at tray-icon sizes. -->
   <rect width="1024" height="1024" rx="224" fill="#0B1220"/>
   <path d="M278 780V244h288c126 0 205 76 205 182 0 105-79 181-205 181H278" fill="none" stroke="#6F8FFF" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M515 607 765 780" fill="none" stroke="#D5E1FF" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>

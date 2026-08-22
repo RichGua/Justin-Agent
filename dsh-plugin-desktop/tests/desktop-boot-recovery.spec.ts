@@ -17,7 +17,7 @@ describe('Desktop early-boot recovery injection', () => {
     expect(DESKTOP_BOOT_TERMINAL_STYLE).toBe(DESKTOP_BOOT_RECOVERY_STYLE)
     expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toBe(DESKTOP_BOOT_RECOVERY_SCRIPT)
     expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toContain('Failed to load plugins')
-    expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toContain('打开 RunDeep 终端 / Open RunDeep Terminal')
+    expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toContain('打开 Rundeep 终端 / Open Rundeep Terminal')
     expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toContain('/api/desktop/terminal/open')
     expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toContain(JSON.stringify(DESKTOP_TERMINAL_OPEN_REQUEST))
     expect(DESKTOP_BOOT_TERMINAL_SCRIPT).toContain('/api/desktop/diagnostics/export')

@@ -4,7 +4,7 @@
 
 ## Current status
 
-`dsh-community-market` is complete and built into RunDeep. It openly connects to a wide range of plugin data sources: anyone can provide, integrate, and use a source that follows the public schemas, while an existing API can become a cooperating source through a reviewed adapter shipped with Market. Its Host/Client runtime validates and normalizes catalog data, persists user-owned source choices, and performs constrained HTTPS requests only after a source is explicitly enabled. Market also implements a limited exact-version npm install path and receipt-backed uninstall through the managed package capability; the renderer has no package-manager access.
+`dsh-community-market` is complete and built into Rundeep. It openly connects to a wide range of plugin data sources: anyone can provide, integrate, and use a source that follows the public schemas, while an existing API can become a cooperating source through a reviewed adapter shipped with Market. Its Host/Client runtime validates and normalizes catalog data, persists user-owned source choices, and performs constrained HTTPS requests only after a source is explicitly enabled. Market also implements a limited exact-version npm install path and receipt-backed uninstall through the managed package capability; the renderer has no package-manager access.
 
 ## Trust model
 
@@ -19,8 +19,8 @@ Installing a plugin is a higher-risk action than browsing because the installed 
 - only an exact stable npm target that passes independent registry, repository, integrity, bundle, deprecation, lifecycle-script, DSH rc.2, and bundled Node.js checks may proceed;
 - previews and reads are cancellable; after confirmation is accepted, the serialized mutation is Host-owned and a UI disconnect only drops the response; a changed active profile or one-shot preview is rejected;
 - uninstall owns only a valid Market receipt whose exact package and bundle still match in the active profile; it does not depend on the catalog source remaining available;
-- opening RunDeep Terminal is an exact empty-body action that carries no command, path, or profile; it never pastes or executes the displayed manual hint;
-- before a Market install, or a `dsh plugin add` launched through Desktop's built-in RunDeep Terminal, Desktop privately snapshots only the active profile's `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml`; direct `pnpm`/`npm` commands in that terminal and commands in an external system terminal are outside this boundary;
+- opening Rundeep Terminal is an exact empty-body action that carries no command, path, or profile; it never pastes or executes the displayed manual hint;
+- before a Market install, or a `dsh plugin add` launched through Desktop's built-in Rundeep Terminal, Desktop privately snapshots only the active profile's `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml`; direct `pnpm`/`npm` commands in that terminal and commands in an external system terminal are outside this boundary;
 - the snapshot does not back up or actively roll back `node_modules`, environment variables, or separate credential stores; because the three allowlisted files are copied as-is, they must not contain embedded credentials;
 - one recovery record blocks the next protected plugin add until the following Desktop generation starts the Host successfully and receives a healthy Renderer report, or recovery is reconciled;
 - if Host startup fails, or the Renderer fails or does not report healthy within 30 seconds, Desktop saves a local diagnostics archive before restoring only recognized before/after configuration images; unknown drift requires manual recovery, and automatic relaunch happens at most once;

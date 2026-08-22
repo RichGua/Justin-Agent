@@ -94,7 +94,7 @@ const PRODUCT_VERSION = desktopProductVersion()
 /** Main-process deadline for one Renderer generation to settle its client Loader. */
 export const RENDERER_BOOT_TIMEOUT_MS = 30_000
 
-/** Native adapter used by the RunDeep launcher and owned by its Cordis shell plugin. */
+/** Native adapter used by the Rundeep launcher and owned by its Cordis shell plugin. */
 export class ElectronDesktopRuntime implements DesktopRuntime {
   readonly platform: DesktopPlatform
   private readonly platformStrategy: ElectronPlatformStrategy
@@ -444,9 +444,9 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     const result = await dialog.showMessageBox({
       type: 'error',
       title: 'Plugin Recovery',
-      message: 'RunDeep could not load all plugins.',
-      detail: `Failed plugins:\n${plugins}\n\n${error}\n\nOpen RunDeep Terminal to update or remove the failing third-party plugin, then restart RunDeep.`,
-      buttons: ['Open RunDeep Terminal', 'Restart RunDeep', 'Dismiss'],
+      message: 'Rundeep could not load all plugins.',
+      detail: `Failed plugins:\n${plugins}\n\n${error}\n\nOpen Rundeep Terminal to update or remove the failing third-party plugin, then restart Rundeep.`,
+      buttons: ['Open Rundeep Terminal', 'Restart Rundeep', 'Dismiss'],
       defaultId: 0,
       cancelId: 2,
       noLink: true,
@@ -505,8 +505,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   private async confirmUpdateDownload(version: string): Promise<boolean> {
     const result = await dialog.showMessageBox({
       type: 'info',
-      title: 'RunDeep Update Available',
-      message: `RunDeep ${version} is available.`,
+      title: 'Rundeep Update Available',
+      message: `Rundeep ${version} is available.`,
       detail: 'Download this update now?',
       buttons: ['Download', 'Later'],
       defaultId: 1,
@@ -522,7 +522,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       await dialog.showMessageBox({
         type: 'warning',
         title: 'Unable to Check for Updates',
-        message: 'RunDeep could not check for updates.',
+        message: 'Rundeep could not check for updates.',
         detail: 'Please try again later.',
         buttons: ['OK'],
         defaultId: 0,
@@ -534,8 +534,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     if (result.status === 'up-to-date') {
       await dialog.showMessageBox({
         type: 'info',
-        title: 'RunDeep Is Up to Date',
-        message: 'No newer version of RunDeep is available.',
+        title: 'Rundeep Is Up to Date',
+        message: 'No newer version of Rundeep is available.',
         detail: `Installed version: ${result.currentVersion}`,
         buttons: ['OK'],
         defaultId: 0,
@@ -546,8 +546,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
 
     await dialog.showMessageBox({
       type: 'info',
-      title: 'RunDeep Update Available',
-      message: `RunDeep ${result.latestVersion} is available.`,
+      title: 'Rundeep Update Available',
+      message: `Rundeep ${result.latestVersion} is available.`,
       detail: 'Installer downloads are unavailable in this build.',
       buttons: ['OK'],
       defaultId: 0,
@@ -585,9 +585,9 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       signal.throwIfAborted()
       await dialog.showMessageBox({
         type: 'info',
-        title: 'RunDeep Update Downloaded',
-        message: `RunDeep ${version} is ready to install.`,
-        detail: 'The disk image has opened. Replace RunDeep in Applications, then reopen it.',
+        title: 'Rundeep Update Downloaded',
+        message: `Rundeep ${version} is ready to install.`,
+        detail: 'The disk image has opened. Replace Rundeep in Applications, then reopen it.',
         buttons: ['OK'],
         defaultId: 0,
         noLink: true,
@@ -597,9 +597,9 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
 
     const result = await dialog.showMessageBox({
       type: 'info',
-      title: 'RunDeep Update Downloaded',
-      message: `RunDeep ${version} is ready to install.`,
-      detail: 'Restart RunDeep and run the installer now?',
+      title: 'Rundeep Update Downloaded',
+      message: `Rundeep ${version} is ready to install.`,
+      detail: 'Restart Rundeep and run the installer now?',
       buttons: ['Restart and Install', 'Later'],
       defaultId: 1,
       cancelId: 1,
@@ -654,8 +654,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       type: 'question',
       title: zh ? '删除更新安装包' : 'Remove Update Installer',
       message: zh
-        ? `RunDeep ${artifact.version} 已安装。`
-        : `RunDeep ${artifact.version} has been installed.`,
+        ? `Rundeep ${artifact.version} 已安装。`
+        : `Rundeep ${artifact.version} has been installed.`,
       detail: zh
         ? `是否删除下载的安装包以释放磁盘空间？\n\n${artifact.path}`
         : `Delete the downloaded installer to free disk space?\n\n${artifact.path}`,
@@ -700,7 +700,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     const error = cause instanceof Error ? cause : new Error(String(cause))
     this.logError(`dsh-plugin-desktop: failed to open terminal: ${error.message}`)
     try {
-      dialog.showErrorBox('Unable to Open RunDeep Terminal', error.message)
+      dialog.showErrorBox('Unable to Open Rundeep Terminal', error.message)
     } catch (dialogCause) {
       this.logError(`dsh-plugin-desktop: failed to show terminal error: ${dialogCause instanceof Error ? dialogCause.message : String(dialogCause)}`)
     }

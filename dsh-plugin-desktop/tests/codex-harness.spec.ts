@@ -5,8 +5,10 @@ import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-ses
 import type { Input, ThreadEvent, ThreadOptions } from '@openai/codex-sdk'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  CODEX_ENDPOINT_PROVIDER_ID,
   CodexHarnessFactory,
   Config,
+  codexEndpointClientOptions,
   type CodexClientLike,
   type CodexThreadLike,
 } from '../src/codex-harness.ts'
@@ -113,7 +115,8 @@ describe('Codex Harness AgentFactory', () => {
     expect(finish?.replayState).toEqual({
       response: {
         kind: 'dsh-plugin-desktop/codex-thread',
-        version: 1,
+        version: 2,
+        provider: CODEX_ENDPOINT_PROVIDER_ID,
         threadId: 'codex-thread-1',
       },
     })
@@ -157,7 +160,7 @@ describe('Codex Harness AgentFactory', () => {
     await test.ctx.fiber.dispose()
   })
 
-  it('resumes a thread recorded by the legacy Desktop-private event', async () => {
+  it('starts a compatible native thread instead of resuming a legacy OpenAI-provider thread', async () => {
     const test = await harness()
     const id = SessionId('codex-session-legacy-resume')
     const first = await test.ctx.agents.create({ sessionId: id })
@@ -183,7 +186,8 @@ describe('Codex Harness AgentFactory', () => {
     second.agent.followup(prompt('Continue the legacy thread'))
     await second.agent.whenIdle()
 
-    expect(test.codex.resumed).toEqual([expect.objectContaining({ id: 'codex-thread-1' })])
+    expect(test.codex.started).toHaveLength(2)
+    expect(test.codex.resumed).toEqual([])
 
     await second.dispose()
     await test.factory.dispose()
@@ -270,17 +274,36 @@ describe('Codex Harness AgentFactory', () => {
       Config({ baseUrl: 'https://api.example.com/v1', apiKeyRef: 'CODEX_API_KEY' }),
     )
 
-    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    expect(resolve).not.toHaveBeenCalled()
+    await factory['getCodex']()
     expect(resolve).toHaveBeenCalledWith(expect.objectContaining({}))
     await factory.dispose()
     await ctx.fiber.dispose()
+  })
+
+  it('registers compatible endpoints as an isolated non-OpenAI-auth Codex provider', () => {
+    expect(codexEndpointClientOptions('https://api.example.com/v1', 'sk-independent')).toEqual({
+      apiKey: 'sk-independent',
+      config: {
+        model_provider: CODEX_ENDPOINT_PROVIDER_ID,
+        model_providers: {
+          [CODEX_ENDPOINT_PROVIDER_ID]: {
+            name: 'Rundeep endpoint',
+            base_url: 'https://api.example.com/v1',
+            env_key: 'CODEX_API_KEY',
+            wire_api: 'responses',
+            requires_openai_auth: false,
+          },
+        },
+      },
+    })
   })
 
   it('fails loud instead of silently falling back to the OpenAI default endpoint', async () => {
     const ctx = new Context()
     const factory = new CodexHarnessFactory(ctx, Config({}))
 
-    await expect(factory['codexPromise']).rejects.toThrow('no automatic Codex endpoint mapping')
+    await expect(factory['getCodex']()).rejects.toThrow('no automatic Codex endpoint mapping')
     await ctx.fiber.dispose()
   })
 
@@ -291,7 +314,7 @@ describe('Codex Harness AgentFactory', () => {
     } as never)
     const factory = new CodexHarnessFactory(ctx, Config({}))
 
-    await expect(factory['codexPromise']).rejects.toThrow('no API key found')
+    await expect(factory['getCodex']()).rejects.toThrow('no API key found')
     await ctx.fiber.dispose()
   })
 
@@ -302,7 +325,7 @@ describe('Codex Harness AgentFactory', () => {
     } as never)
     const factory = new CodexHarnessFactory(ctx, Config({}))
 
-    await expect(factory['codexPromise']).rejects.toThrow('no automatic Codex endpoint mapping')
+    await expect(factory['getCodex']()).rejects.toThrow('no automatic Codex endpoint mapping')
     await ctx.fiber.dispose()
   })
 
@@ -315,7 +338,7 @@ describe('Codex Harness AgentFactory', () => {
     } as never)
     const factory = new CodexHarnessFactory(ctx, Config({}))
 
-    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    await factory['getCodex']()
     // The base DeepSeek key reference is resolved automatically, no explicit apiKeyRef needed.
     expect(resolve).toHaveBeenCalledOnce()
     await factory.dispose()
@@ -334,7 +357,7 @@ describe('Codex Harness AgentFactory', () => {
     } as never)
     const factory = new CodexHarnessFactory(ctx, Config({}))
 
-    await new Promise(resolveImmediate => setImmediate(resolveImmediate))
+    await factory['getCodex']()
     expect(resolve).toHaveBeenCalledOnce()
     await factory.dispose()
     await ctx.fiber.dispose()

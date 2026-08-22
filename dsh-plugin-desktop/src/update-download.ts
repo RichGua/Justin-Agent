@@ -1,4 +1,4 @@
-/** Headless, confirmation-gated downloads for RunDeep installers. */
+/** Headless, confirmation-gated downloads for Rundeep installers. */
 
 import { randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
@@ -161,7 +161,7 @@ export function desktopUpdateFilename(platform: DesktopDownloadPlatform, version
   validatedVersion(version)
   const extension = platform === 'darwin' ? 'dmg' : 'exe'
   const platformName = platform === 'darwin' ? 'mac' : 'windows'
-  return `RunDeep-${version}-${platformName}.${extension}`
+  return `Rundeep-${version}-${platformName}.${extension}`
 }
 
 /** Remember a downloaded installer until an upgraded application resolves its retention. */

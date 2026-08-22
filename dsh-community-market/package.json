@@ -2,7 +2,7 @@
   "name": "dsh-community-market",
   "version": "0.1.0-dev.0",
   "private": true,
-  "description": "Community plugin discovery and managed package operations for RunDeep",
+  "description": "Community plugin discovery and managed package operations for Rundeep",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
@@ -10,12 +10,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RichGua/Justin-Agent.git",
+    "url": "git+https://github.com/RichGua/Rundeep.git",
     "directory": "dsh-community-market"
   },
-  "homepage": "https://github.com/RichGua/Justin-Agent/tree/main/dsh-community-market#readme",
+  "homepage": "https://github.com/RichGua/Rundeep/tree/main/dsh-community-market#readme",
   "bugs": {
-    "url": "https://github.com/RichGua/Justin-Agent/issues"
+    "url": "https://github.com/RichGua/Rundeep/issues"
   },
   "type": "module",
   "main": "lib/index.js",

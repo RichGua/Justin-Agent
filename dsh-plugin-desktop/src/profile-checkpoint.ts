@@ -47,6 +47,18 @@ export const DESKTOP_PROFILE_CHECKPOINT_FILES = [
   '.dsh-market/state.json',
 ] as const
 
+// Version 1 initially shipped without the desktop-owned plugin registry. Keep
+// the exact historical shape so a successful boot can replace that snapshot;
+// restore paths must continue to reject it because it is not a complete image
+// of the current declarative profile.
+const LEGACY_DESKTOP_PROFILE_CHECKPOINT_FILES = [
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'cordis.patch.yml',
+  '.dsh-market/state.json',
+] as const
+
 export type DesktopProfileCheckpointFilename = typeof DESKTOP_PROFILE_CHECKPOINT_FILES[number]
 
 const FILE_LIMITS: Record<DesktopProfileCheckpointFilename, number> = {
@@ -295,7 +307,7 @@ export class DesktopProfileCheckpoint {
     this.recoverOrphanedLatest()
     ensureDirectory(dirname(this.snapshotDirectory))
     const current = this.readCurrentImages(true)
-    const existing = this.readSnapshot(false)
+    const existing = this.readSnapshot(false, true)
     if (existing !== undefined && existing.manifest.profileIdentity === this.profileIdentity
       && existing.manifest.profileName === this.profileName && existing.manifest.provider === this.provider
       && existing.manifest.files.every((record, index) => fileEqual(record, current[index]!))) {
@@ -481,7 +493,7 @@ export class DesktopProfileCheckpoint {
     }
   }
 
-  private readSnapshot(requireComplete: boolean): { readonly directory: string; readonly manifest: ProfileCheckpointManifest } | undefined {
+  private readSnapshot(requireComplete: boolean, replaceLegacy = false): { readonly directory: string; readonly manifest: ProfileCheckpointManifest } | undefined {
     try {
       const directoryItem = lstatSync(this.snapshotDirectory)
       if (!directoryItem.isDirectory() || directoryItem.isSymbolicLink()
@@ -492,6 +504,16 @@ export class DesktopProfileCheckpoint {
       if (value === null || typeof value !== 'object' || Array.isArray(value)) fail('checkpoint manifest is invalid')
       const object = value as Record<string, unknown>
       const files = object.files
+      if (replaceLegacy && object.version === VERSION && typeof object.snapshotId === 'string'
+        && ID_PATTERN.test(object.snapshotId) && typeof object.capturedAt === 'string'
+        && object.profileIdentity === this.profileIdentity && object.profileName === this.profileName
+        && object.provider === this.provider && Array.isArray(files)
+        && files.length === LEGACY_DESKTOP_PROFILE_CHECKPOINT_FILES.length
+        && files.every((record, index) => record !== null && typeof record === 'object' && !Array.isArray(record)
+          && (record as Record<string, unknown>).name === LEGACY_DESKTOP_PROFILE_CHECKPOINT_FILES[index]
+          && typeof (record as Record<string, unknown>).present === 'boolean')) {
+        return undefined
+      }
       if (object.version !== VERSION || typeof object.snapshotId !== 'string' || !ID_PATTERN.test(object.snapshotId)
         || typeof object.capturedAt !== 'string' || object.profileIdentity !== this.profileIdentity
         || object.profileName !== this.profileName || object.provider !== this.provider

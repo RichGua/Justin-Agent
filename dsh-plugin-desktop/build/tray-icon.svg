@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="RunDeep">
-  <!-- Compact RunDeep monogram for 16–32px system-tray rendering. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="Rundeep">
+  <!-- Compact Rundeep monogram for 16–32px system-tray rendering. -->
   <g stroke="#4D6BFE" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" fill="none">
     <path d="M4 13V3.2h4.2c2.4 0 3.8 1.45 3.8 3.4S10.6 10 8.2 10H4"/>
     <path d="M8 10l4 3"/>

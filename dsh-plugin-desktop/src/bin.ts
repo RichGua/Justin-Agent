@@ -1,11 +1,13 @@
-/** Headless-safe npm launcher for the RunDeep Electron executable. */
+/** Headless-safe npm launcher for the Rundeep Electron executable. */
 
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { posix, resolve, win32 } from 'node:path'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { exportDesktopDiagnostics } from './diagnostic-export.ts'
+import { defaultDesktopUserDataDirectory as resolveDefaultDesktopUserDataDirectory } from './desktop-user-data.ts'
+
+export { defaultDesktopUserDataDirectory } from './desktop-user-data.ts'
 
 /** Parsed launcher action. */
 export type DesktopCliAction = 'export-diagnostics' | 'help' | 'version' | 'launch'
@@ -13,7 +15,7 @@ export type DesktopCliAction = 'export-diagnostics' | 'help' | 'version' | 'laun
 /** Human-readable launcher help. */
 export const DESKTOP_CLI_HELP = `Usage: dsh-plugin-desktop [options]
 
-Launch RunDeep with the selected Web-capable profile.
+Launch Rundeep with the selected Web-capable profile.
 
 Options:
   --export-diagnostics  export logs and crash evidence without launching the app
@@ -41,25 +43,6 @@ function packageVersion(): string {
   return manifest.version
 }
 
-/** Resolve the Electron user-data location without importing Electron. */
-export function defaultDesktopUserDataDirectory(
-  platform: NodeJS.Platform = process.platform,
-  environment: NodeJS.ProcessEnv = process.env,
-  homeDirectory: string = homedir(),
-): string {
-  const path = platform === 'win32' ? win32 : posix
-  if (platform === 'win32') {
-    const appData = environment.APPDATA
-    if (appData === undefined || appData.length === 0) {
-      throw new Error('APPDATA is unavailable; cannot locate RunDeep diagnostics')
-    }
-    return path.join(appData, 'RunDeep')
-  }
-  if (platform === 'darwin') return path.join(homeDirectory, 'Library', 'Application Support', 'RunDeep')
-  const config = environment.XDG_CONFIG_HOME
-  return path.join(config === undefined || config.length === 0 ? path.join(homeDirectory, '.config') : config, 'RunDeep')
-}
-
 export interface DesktopCliOptions {
   /** Override used by focused tests and recovery tooling with a non-default data root. */
   readonly userDataDir?: string
@@ -82,7 +65,7 @@ async function launchElectron(): Promise<number> {
       + '  npm install -g dsh-plugin-desktop\n'
       + 'Or add electron to the profile before launching:\n'
       + '  dsh plugin --profile <name> add electron\n'
-      + 'Or use the packaged RunDeep application.\n',
+      + 'Or use the packaged Rundeep application.\n',
     )
     return 1
   }
@@ -123,7 +106,7 @@ export async function runDesktopCli(
   }
   if (action === 'export-diagnostics') {
     const path = await exportDesktopDiagnostics(
-      options.userDataDir ?? defaultDesktopUserDataDirectory(),
+      options.userDataDir ?? resolveDefaultDesktopUserDataDirectory(),
       { appVersion: packageVersion() },
     )
     process.stdout.write(`${path}\n`)

@@ -9,7 +9,7 @@ const destination = resolve(packageDirectory, 'build/app-icon.ico')
 
 // Modern Windows supports PNG payloads inside ICO containers.  Keeping this
 // generator beside the source asset makes the desktop shortcut and packaged
-// application use the exact same RunDeep mark.
+// application use the exact same Rundeep mark.
 const image = await sharp(source)
   .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
   .ensureAlpha()

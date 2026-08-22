@@ -31,7 +31,7 @@ function context(
     appOutDir,
     electronPlatformName,
     ...(arch === undefined ? {} : { arch }),
-    packager: { appInfo: { productFilename: 'RunDeep' } },
+    packager: { appInfo: { productFilename: 'Rundeep' } },
   }
 }
 
@@ -116,7 +116,7 @@ describe('packaged desktop runtime verification', () => {
   it.each([
     [
       'darwin',
-      join('/build', 'RunDeep.app', 'Contents', 'Resources', 'app.asar'),
+      join('/build', 'Rundeep.app', 'Contents', 'Resources', 'app.asar'),
     ],
     [
       'win32',

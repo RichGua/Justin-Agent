@@ -1,4 +1,4 @@
-/** Cordis Host plugin for scheduled and interactive RunDeep updates. */
+/** Cordis Host plugin for scheduled and interactive Rundeep updates. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'

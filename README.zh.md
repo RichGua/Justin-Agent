@@ -1,4 +1,4 @@
-# RunDeep 中文入口
+# Rundeep 中文入口
 
 当前中文产品 README 是 [`README.md`](README.md)，完整文档索引在 [`docs/README.md`](docs/README.md)。
 

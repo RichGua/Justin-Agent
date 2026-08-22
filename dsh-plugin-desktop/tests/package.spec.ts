@@ -555,7 +555,7 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(manifest.version).toBe(workspaceManifest.version)
-    expect(manifest.build?.productName).toBe('RunDeep')
+    expect(manifest.build?.productName).toBe('Rundeep')
     expect(manifest.build?.appId).toBe('com.rundeep.desktop')
     expect(manifest.build?.asarUnpack).toEqual([
       'package.json',
@@ -592,7 +592,7 @@ describe('published package surface', () => {
       target: 'nsis',
       arch: ['x64'],
     }])
-    expect(manifest.build?.win?.artifactName).toBe('RunDeep-${version}-${arch}-Portable.${ext}')
+    expect(manifest.build?.win?.artifactName).toBe('Rundeep-${version}-${arch}-Portable.${ext}')
     expect(manifest.build?.nsis).toEqual({
       license: 'THIRD_PARTY_NOTICES.md',
       oneClick: false,
@@ -602,9 +602,9 @@ describe('published package surface', () => {
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
       differentialPackage: false,
-      shortcutName: 'RunDeep',
+      shortcutName: 'Rundeep',
       useZip: true,
-      artifactName: 'RunDeep-${version}-${arch}-Setup.${ext}',
+      artifactName: 'Rundeep-${version}-${arch}-Setup.${ext}',
     })
     expect(manifest.build?.linux?.icon).toBe('build/app-icon.png')
   })
@@ -727,7 +727,7 @@ describe('published package surface', () => {
     }
   })
 
-  it('keeps the generated RunDeep application icon stable', () => {
+  it('keeps the generated Rundeep application icon stable', () => {
     const digest = createHash('sha256')
       .update(readFileSync(new URL('build/app-icon.png', packageRoot)))
       .digest('hex')

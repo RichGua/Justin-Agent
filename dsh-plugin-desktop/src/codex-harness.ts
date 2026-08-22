@@ -59,6 +59,7 @@ import z from '@deepseek-ai/schemastery'
 import {
   Codex,
   type ApprovalMode,
+  type CodexOptions,
   type Input,
   type ModelReasoningEffort,
   type SandboxMode,
@@ -84,7 +85,12 @@ declare module '@deepseek-ai/dsh-session' {
 }
 
 const CODEX_REPLAY_KIND = 'dsh-plugin-desktop/codex-thread'
-const CODEX_REPLAY_VERSION = 1
+const CODEX_REPLAY_VERSION = 2
+
+/** Isolated Codex CLI provider used for launcher-resolved compatible endpoints. */
+export const CODEX_ENDPOINT_PROVIDER_ID = 'rundeep-endpoint'
+/** The SDK injects a resolved credential under this fixed child-process key. */
+const CODEX_ENDPOINT_API_KEY_ENV = 'CODEX_API_KEY'
 
 /** DeepSeek Responses API endpoint reused from the DSH base model. */
 const DEEPSEEK_API_BASE = 'https://api.deepseek.com'
@@ -101,6 +107,7 @@ const CODEX_REASONING_EFFORTS = new Set<string>(['minimal', 'low', 'medium', 'hi
 interface CodexReplayResponse {
   readonly kind: typeof CODEX_REPLAY_KIND
   readonly version: typeof CODEX_REPLAY_VERSION
+  readonly provider: typeof CODEX_ENDPOINT_PROVIDER_ID
   readonly threadId: string
 }
 
@@ -109,6 +116,7 @@ function codexReplayState(threadId: string): ReplayEnvelope {
     response: {
       kind: CODEX_REPLAY_KIND,
       version: CODEX_REPLAY_VERSION,
+      provider: CODEX_ENDPOINT_PROVIDER_ID,
       threadId,
     } satisfies CodexReplayResponse,
   }
@@ -121,19 +129,18 @@ function codexThreadIdFromReplayState(value: unknown): string | undefined {
   const candidate = response as Partial<CodexReplayResponse>
   return candidate.kind === CODEX_REPLAY_KIND
     && candidate.version === CODEX_REPLAY_VERSION
+    && candidate.provider === CODEX_ENDPOINT_PROVIDER_ID
     && typeof candidate.threadId === 'string'
     && candidate.threadId.length > 0
     ? candidate.threadId
     : undefined
 }
 
-/** Resolve the newest native thread identity from the standard replay seam or a legacy event. */
+/** Resolve the newest native thread created with this build's isolated endpoint provider. */
 function persistedCodexThreadId(events: readonly Session['events'][number][]): string | undefined {
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index]
-    if (event?.type === 'codex/thread') {
-      if (event.data.threadId.length > 0) return event.data.threadId
-    } else if (event?.type === 'assistant/message') {
+    if (event?.type === 'assistant/message') {
       const source = event.data.message.source
       if (source.kind === 'model' && source.provider === 'codex') {
         const threadId = codexThreadIdFromReplayState(source.replayState)
@@ -145,6 +152,31 @@ function persistedCodexThreadId(events: readonly Session['events'][number][]): s
     }
   }
   return undefined
+}
+
+/**
+ * Build an SDK client configuration that cannot fall back to stored ChatGPT
+ * authentication. `baseUrl` alone only overrides the built-in OpenAI route;
+ * it does not change that route's auth policy, so a signed-in Codex install
+ * may still try to refresh its ChatGPT token. A named provider with its own
+ * environment key makes compatible endpoints deterministic and independent.
+ */
+export function codexEndpointClientOptions(baseUrl: string, apiKey: string): CodexOptions {
+  return {
+    apiKey,
+    config: {
+      model_provider: CODEX_ENDPOINT_PROVIDER_ID,
+      model_providers: {
+        [CODEX_ENDPOINT_PROVIDER_ID]: {
+          name: 'Rundeep endpoint',
+          base_url: baseUrl,
+          env_key: CODEX_ENDPOINT_API_KEY_ENV,
+          wire_api: 'responses',
+          requires_openai_auth: false,
+        },
+      },
+    },
+  }
 }
 
 /** Loader-owned defaults for native Codex execution. */
@@ -293,7 +325,7 @@ export class CodexHarnessAgent implements Agent {
     public readonly id: SessionId,
     requestedOptions: AgentOptions,
     public readonly session: Session,
-    private readonly codexPromise: Promise<CodexClientLike>,
+    private readonly resolveCodex: () => Promise<CodexClientLike>,
     private readonly config: Config,
     private readonly baseModel?: ModelSelection,
   ) {
@@ -491,7 +523,7 @@ export class CodexHarnessAgent implements Agent {
 
   private async getThread(): Promise<CodexThreadLike> {
     if (this.thread !== undefined) return this.thread
-    const codex = await this.codexPromise
+    const codex = await this.resolveCodex()
     this.thread = this.threadId === undefined
       ? codex.startThread(this.threadOptions())
       : codex.resumeThread(this.threadId, this.threadOptions())
@@ -723,18 +755,24 @@ async function awaitSetup(
 export class CodexHarnessFactory implements AgentFactory {
   private readonly teardown = new AbortController()
   private readonly live = new Set<() => Promise<void>>()
-  private readonly codexPromise: Promise<CodexClientLike>
+  private codexPromise: Promise<CodexClientLike> | undefined
   private readonly baseModel: ModelSelection | undefined
 
   constructor(
     private readonly ctx: Context,
     private readonly config: Config,
-    codex?: CodexClientLike,
+    private readonly injectedCodex?: CodexClientLike,
   ) {
     this.baseModel = config.useBaseModel === false
       ? undefined
       : ctx.get('agentDefaultModel')?.currentSelection()
-    this.codexPromise = codex === undefined ? this.buildCodex(ctx, config) : Promise.resolve(codex)
+  }
+
+  /** Resolve credentials and construct the shared client only when a turn needs it. */
+  private getCodex(): Promise<CodexClientLike> {
+    return this.codexPromise ??= this.injectedCodex === undefined
+      ? this.buildCodex(this.ctx, this.config)
+      : Promise.resolve(this.injectedCodex)
   }
 
   /** Read the base DeepSeek provider's settings section (endpoint and key reference). */
@@ -783,10 +821,16 @@ export class CodexHarnessFactory implements AgentFactory {
         )
       }
     }
-    return new Codex({
-      ...(baseUrl === undefined ? {} : { baseUrl }),
-      ...(apiKey === undefined ? {} : { apiKey }),
-    })
+    if (baseUrl !== undefined) {
+      if (apiKey === undefined) {
+        throw new Error(
+          `codex-harness: no API key found for ${JSON.stringify(apiKeyRef)}; `
+          + 'store it through the DSH credentials',
+        )
+      }
+      return new Codex(codexEndpointClientOptions(baseUrl, apiKey))
+    }
+    return new Codex(apiKey === undefined ? {} : { apiKey })
   }
 
   private prepare(
@@ -810,7 +854,7 @@ export class CodexHarnessFactory implements AgentFactory {
       id,
       options,
       session,
-      this.codexPromise,
+      () => this.getCodex(),
       this.config,
       this.baseModel,
     )

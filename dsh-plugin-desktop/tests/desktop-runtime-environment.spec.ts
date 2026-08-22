@@ -35,10 +35,10 @@ function options(
   return {
     platform,
     appExecutable: platform === 'win32'
-      ? 'C:\\Program Files\\DSH 100% Desktop\\RunDeep.exe'
-      : "/Applications/DSH O'Brien.app/Contents/MacOS/RunDeep",
+      ? 'C:\\Program Files\\DSH 100% Desktop\\Rundeep.exe'
+      : "/Applications/DSH O'Brien.app/Contents/MacOS/Rundeep",
     pnpmBinPath: platform === 'win32'
-      ? 'C:\\Program Files\\RunDeep\\resources\\app.asar.unpacked\\node_modules\\pnpm\\bin\\pnpm.mjs'
+      ? 'C:\\Program Files\\Rundeep\\resources\\app.asar.unpacked\\node_modules\\pnpm\\bin\\pnpm.mjs'
       : "/Applications/DSH O'Brien.app/Contents/Resources/app.asar.unpacked/node_modules/pnpm/bin/pnpm.mjs",
     electronVersion: '43.4.0',
     stateDir,

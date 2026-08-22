@@ -1,8 +1,8 @@
-# RunDeep Documentation
+# Rundeep Documentation
 
 [中文文档](README.md)
 
-This directory is the product and developer documentation index for RunDeep. The root [`README.en.md`](../README.en.md) is the short product entry point; these pages explain why the project exists, how to use it, and how to build plugins for it. Want to contribute? See [Contributing](../CONTRIBUTING.en.md).
+This directory is the product and developer documentation index for Rundeep. The root [`README.en.md`](../README.en.md) is the short product entry point; these pages explain why the project exists, how to use it, and how to build plugins for it. Want to contribute? See [Contributing](../CONTRIBUTING.en.md).
 
 ## Read by goal
 

@@ -1619,7 +1619,7 @@ __metadata:
 
 "@deepseek-ai/dsh-client-ui-directory-picker-browse@patch:@deepseek-ai/dsh-client-ui-directory-picker-browse@npm%3A0.1.1-rc.2#./patches/dsh-client-ui-directory-picker-browse@0.1.1-rc.2.patch::locator=rundeep%40workspace%3A.":
   version: 0.1.1-rc.2
-  resolution: "@deepseek-ai/dsh-client-ui-directory-picker-browse@patch:@deepseek-ai/dsh-client-ui-directory-picker-browse@npm%3A0.1.1-rc.2#./patches/dsh-client-ui-directory-picker-browse@0.1.1-rc.2.patch::version=0.1.1-rc.2&hash=a085c4&locator=rundeep%40workspace%3A."
+  resolution: "@deepseek-ai/dsh-client-ui-directory-picker-browse@patch:@deepseek-ai/dsh-client-ui-directory-picker-browse@npm%3A0.1.1-rc.2#./patches/dsh-client-ui-directory-picker-browse@0.1.1-rc.2.patch::version=0.1.1-rc.2&hash=3ba9a2&locator=rundeep%40workspace%3A."
   dependencies:
     clsx: "npm:^2.0.0"
   peerDependencies:
@@ -1628,7 +1628,7 @@ __metadata:
     "@deepseek-ai/dsh-client-runtime": ^0.1.1-rc.2
     "@deepseek-ai/dsh-client-ui-workspace": ^0.1.1-rc.2
     "@deepseek-ai/dsh-invariants": ^0.1.1-rc.2
-  checksum: 10c0/2ff74acfc6cc6e9a4640fd864ff39afffcba5e4c1a25634d3d5a50445d262b397e1e9459cb1a1d3eaf59d42dba13fb50fe80c21fe10f5c7ad75c8c257db6656d
+  checksum: 10c0/e99ddefe40d8d3a3bae030bdb22d3f6fe664805b4dd3813463104a09f5b95ce2d1f4ffdf612020bf38000858ff5443bc95852d0bc036c68de4cc75087f799244
   languageName: node
   linkType: hard
 
@@ -8450,7 +8450,7 @@ __metadata:
 
 "dshmarket@patch:dshmarket@npm%3A1.17.1#./.yarn/patches/dshmarket-npm-1.17.1-d9fe6da08c.patch::locator=rundeep%40workspace%3A.":
   version: 1.17.1
-  resolution: "dshmarket@patch:dshmarket@npm%3A1.17.1#./.yarn/patches/dshmarket-npm-1.17.1-d9fe6da08c.patch::version=1.17.1&hash=810d73&locator=rundeep%40workspace%3A."
+  resolution: "dshmarket@patch:dshmarket@npm%3A1.17.1#./.yarn/patches/dshmarket-npm-1.17.1-d9fe6da08c.patch::version=1.17.1&hash=72b160&locator=rundeep%40workspace%3A."
   dependencies:
     js-yaml: "npm:^4.1.0"
     undici: "npm:^7.29.0"
@@ -8460,7 +8460,7 @@ __metadata:
   peerDependenciesMeta:
     "@deepseek-ai/dsh-settings":
       optional: true
-  checksum: 10c0/c05d85152dde5107e29bc74a3b4e6781136e516167f5caa9cc31e771b0f38aa1633599d12aed2ffebd01ce325d211d7e57fa0739f71fcc598054dee559c5d15d
+  checksum: 10c0/c9dad10d8b66b88d9080f1c4c326de485569512d63a18177c40512e441b20894c66935acd2d5f89832f68313477fedf1af8aba2947d2ebd336e571a640018771
   languageName: node
   linkType: hard
 

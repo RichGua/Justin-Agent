@@ -2,7 +2,7 @@
   "name": "rundeep",
   "version": "2.0.2",
   "private": true,
-  "description": "RunDeep desktop AI harness workspace",
+  "description": "Rundeep desktop AI harness workspace",
   "license": "MIT",
   "packageManager": "yarn@4.18.0",
   "engines": {

@@ -106,6 +106,35 @@ describe('Desktop profile health checkpoint', () => {
     }
   })
 
+  it('replaces the legacy version 1 snapshot shape after a healthy boot', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const manifestPath = join(target.checkpoint.snapshotDirectory, 'manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { files: Array<{ name: string }> }
+    manifest.files = manifest.files.filter(record => record.name !== '.rundeep/plugins.json')
+    writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+
+    const replacement = target.checkpoint.captureHealthy()
+
+    expect(replacement.deduplicated).toBe(false)
+    expect(replacement.manifest.files.map(record => record.name)).toContain('.rundeep/plugins.json')
+    expect(target.checkpoint.inspectRestore()).toMatchObject({
+      snapshotExists: true,
+      currentDiffers: false,
+    })
+  })
+
+  it('does not replace a malformed current snapshot', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const manifestPath = join(target.checkpoint.snapshotDirectory, 'manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { files: Array<{ name: string }> }
+    manifest.files[0]!.name = 'unexpected.json'
+    writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+
+    expect(() => target.checkpoint.captureHealthy()).toThrow('checkpoint manifest is invalid')
+  })
+
   it('restores drift, removes files absent from the healthy image, and marks one failed generation', () => {
     const target = fixture()
     target.checkpoint.captureHealthy()

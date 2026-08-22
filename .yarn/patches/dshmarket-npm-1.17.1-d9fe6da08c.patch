@@ -51,11 +51,11 @@ index 2bdfb2a1acc678c3e995e4f70ccba8ce95bc24b8..6d15dbfcc1dd40f9e6cef06cac1b5988
 +            if (prepared.args[0] === 'add') {
 +                const identity = await desktopInstallIdentity(prepared.target);
 +                if (identity === null) {
-+                    throw new Error('dsh-market: DSH Desktop managed installation requires an npm package with an exact published version');
++                    throw new Error('dsh-market: Rundeep managed installation requires an npm package with an exact published version');
 +                }
 +                const packageTargets = prepared.args.slice(1).filter(argument => !argument.startsWith('-'));
 +                if (packageTargets.length !== 1 || packageTargets[0] !== prepared.target) {
-+                    throw new Error('dsh-market: DSH Desktop managed installation accepts exactly one npm package target');
++                    throw new Error('dsh-market: Rundeep managed installation accepts exactly one npm package target');
 +                }
 +                const options = prepared.args.slice(1).filter(argument => argument.startsWith('-'));
 +                handle = service.runExternalMarketPluginInstall(['add', ...options, identity.target], invokingDir, abort.signal);
@@ -133,11 +133,11 @@ index 0cc2535e43e371e72700301e783694e0b7c2e4c7..b0f09a897428af80791cc88e9088f2c5
 +      if (prepared.args[0] === 'add') {
 +        const identity = await desktopInstallIdentity(prepared.target)
 +        if (identity === null) {
-+          throw new Error('dsh-market: DSH Desktop managed installation requires an npm package with an exact published version')
++          throw new Error('dsh-market: Rundeep managed installation requires an npm package with an exact published version')
 +        }
 +        const packageTargets = prepared.args.slice(1).filter(argument => !argument.startsWith('-'))
 +        if (packageTargets.length !== 1 || packageTargets[0] !== prepared.target) {
-+          throw new Error('dsh-market: DSH Desktop managed installation accepts exactly one npm package target')
++          throw new Error('dsh-market: Rundeep managed installation accepts exactly one npm package target')
 +        }
 +        const options = prepared.args.slice(1).filter(argument => argument.startsWith('-'))
 +        handle = service.runExternalMarketPluginInstall(

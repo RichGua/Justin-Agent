@@ -46,7 +46,7 @@ describe('electronPlatformStrategy', () => {
     expect(strategy.canPickDirectory).toBe(true)
     expect(strategy.canToggleShellMode).toBe(true)
 
-    strategy.configureApplication(icon, 'RunDeep')
+    strategy.configureApplication(icon, 'Rundeep')
     strategy.configureWindow(window as never)
     strategy.refreshThemeMaterial(window as never)
 
@@ -66,7 +66,7 @@ describe('electronPlatformStrategy', () => {
     expect(strategy.canPickDirectory).toBe(false)
     expect(strategy.canToggleShellMode).toBe(true)
 
-    strategy.configureApplication(icon, 'RunDeep')
+    strategy.configureApplication(icon, 'Rundeep')
     strategy.configureWindow(window as never)
     strategy.refreshThemeMaterial(window as never)
 
@@ -86,7 +86,7 @@ describe('electronPlatformStrategy', () => {
     expect(strategy.canPickDirectory).toBe(false)
     expect(strategy.canToggleShellMode).toBe(false)
 
-    strategy.configureApplication({} as never, 'RunDeep')
+    strategy.configureApplication({} as never, 'Rundeep')
     strategy.configureWindow(window as never)
     strategy.refreshThemeMaterial(window as never)
 

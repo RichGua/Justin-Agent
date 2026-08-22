@@ -19,7 +19,7 @@ const zh = {
   tab: '按 Harness 分类', loading: '正在读取 Loader 插件…', error: '暂时无法读取插件列表。', retry: '重试', search: '搜索插件',
   noPlugins: '此分组中没有插件。', enabled: '已启用', disabled: '已停用', enable: '启用', disable: '停用',
   changing: '正在保存插件状态…', changeError: '插件状态保存失败，请重试。',
-  restartRequired: '插件状态已保存，需要重启 RunDeep 才会生效。', restart: '立即重启', restarting: '正在重启…', restartError: '无法重启 RunDeep，请手动重启应用。',
+  restartRequired: '插件状态已保存，需要重启 Rundeep 才会生效。', restart: '立即重启', restarting: '正在重启…', restartError: '无法重启 Rundeep，请手动重启应用。',
   expand: '展开', collapse: '折叠',
   engineSwitch: 'Harness 运行引擎', engineSwitchHint: '切换后自动重启，并只加载该引擎对应的插件集；通用插件不受影响。',
   newHarness: '新增 Harness', harnessName: 'Harness 名称', enginePick: '引擎插件（可选）', createHarness: '添加', deleteHarness: '删除 Harness', harnessError: 'Harness 保存失败，请重试。',
@@ -30,7 +30,7 @@ const en: Record<LocaleKey, string> = {
   tab: 'By Harness', loading: 'Reading Loader plugins…', error: 'The plugin list is temporarily unavailable.', retry: 'Retry', search: 'Search plugins',
   noPlugins: 'This group has no plugins.', enabled: 'Enabled', disabled: 'Disabled', enable: 'Enable', disable: 'Disable',
   changing: 'Saving plugin state…', changeError: 'The plugin state could not be saved. Try again.',
-  restartRequired: 'The plugin state was saved. Restart RunDeep to apply it.', restart: 'Restart now', restarting: 'Restarting…', restartError: 'RunDeep could not restart. Restart the app manually.',
+  restartRequired: 'The plugin state was saved. Restart Rundeep to apply it.', restart: 'Restart now', restarting: 'Restarting…', restartError: 'Rundeep could not restart. Restart the app manually.',
   expand: 'Expand', collapse: 'Collapse',
   engineSwitch: 'Harness runtime', engineSwitchHint: 'Switching restarts automatically and loads only that engine’s plugin set; common plugins are untouched.',
   newHarness: 'New harness', harnessName: 'Harness name', enginePick: 'Engine plugin (optional)', createHarness: 'Add', deleteHarness: 'Delete harness', harnessError: 'The harness could not be saved. Try again.',
@@ -287,7 +287,7 @@ function installStyles() {
 }
 
 /** Replace the upstream tab body with the launcher-managed effective Loader view. */
-export function applyRunDeepPluginInventory(ctx: ClientContext) {
+export function applyRundeepPluginInventory(ctx: ClientContext) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'rundeep: plugin inventory dictionaries')
   ctx.effect(installStyles, 'rundeep: plugin inventory styles')
   const api = createDesktopSettingsApi()

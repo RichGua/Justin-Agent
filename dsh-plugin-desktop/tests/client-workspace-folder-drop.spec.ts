@@ -66,7 +66,7 @@ describe('desktop workspace folder drop', () => {
       { name: 'repo' } as File,
       { getPathForFile: () => 'E:\\repo' },
       actions,
-    )).rejects.toThrow('RunDeep rejected this workspace location')
+    )).rejects.toThrow('Rundeep rejected this workspace location')
     expect(actions.validateDirectory).toHaveBeenCalledWith('E:\\repo')
     expect(actions.create).not.toHaveBeenCalled()
   })

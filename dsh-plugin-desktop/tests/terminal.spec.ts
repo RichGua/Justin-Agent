@@ -32,9 +32,9 @@ describe('desktop terminal Host plugin', () => {
     expect(name).toBe('desktop-terminal')
     expect(inject).toEqual(['desktopRuntime'])
     expect(trayItem).toMatchObject({ group: 'tools', order: 10 })
-    expect(trayItem?.label()).toBe('Open RunDeep Terminal')
+    expect(trayItem?.label()).toBe('Open Rundeep Terminal')
     locale = 'zh'
-    expect(trayItem?.label()).toBe('打开 RunDeep 终端')
+    expect(trayItem?.label()).toBe('打开 Rundeep 终端')
     trayItem?.invoke()
     expect(openTerminal).toHaveBeenCalledOnce()
 

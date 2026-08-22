@@ -2,7 +2,7 @@
 
 [中文](market-shell.zh.md)
 
-Status: delivered and built into RunDeep, including the Host/Client market, limited npm installation, receipt-backed uninstall, and direct-bundle enable/disable
+Status: delivered and built into Rundeep, including the Host/Client market, limited npm installation, receipt-backed uninstall, and direct-bundle enable/disable
 
 This document defines the delivered implementation boundary for `dsh-community-market`. It is deliberately narrower than a complete marketplace. The package owns an in-product shell and adapters; it does not own the community catalog, package registry, or DSH profile format.
 
@@ -11,7 +11,7 @@ This document defines the delivered implementation boundary for `dsh-community-m
 - Give users one calm place to discover, search, and understand community plugins.
 - Keep catalog browsing read-only until a user explicitly chooses an action.
 - Install only into the active profile, with the plugin source and profile visible before confirmation.
-- Protect each Market install, and each `dsh plugin add` launched through Desktop's built-in RunDeep Terminal, with a configuration-level snapshot that must pass next-start health verification.
+- Protect each Market install, and each `dsh plugin add` launched through Desktop's built-in Rundeep Terminal, with a configuration-level snapshot that must pass next-start health verification.
 - Remove only installations owned by a valid Market receipt in the active profile, even when the original source is unavailable.
 - Reuse existing DSH plugin and Desktop profile behavior instead of creating parallel state.
 - Let people save and add catalog sources, then explicitly browse one selected source at a time without coupling the interface to one service.
@@ -123,7 +123,7 @@ On Desktop, the Market Host uses the public services already owned by `dsh-plugi
 5. Verify the installed profile dependency and contained DSH bundle before saving a receipt; restore the allowlisted configuration snapshot when an invalid or unrecordable install has a recognized file image.
 6. After success, issue a short-lived one-shot restart grant so the user can choose **Restart now** or **Restart later**; never restart silently. Keep the recovery record pending and refuse another protected plugin add until the next Desktop generation verifies startup health or reconciles a rollback.
 
-When Desktop services are unavailable, browsing stays available while package operations explain that they require RunDeep. Managed installation never falls back to ambient `pnpm`, a shell command, a guessed `dsh` executable, or an inactive profile. **Open RunDeep Terminal** is a separate user-controlled escape hatch: its request contains no command, path, or profile and only opens Desktop's built-in terminal; the user decides whether to copy and run displayed text. A later `dsh plugin add` through that built-in terminal receives the same configuration-recovery handoff. Direct `pnpm` or `npm` commands in that terminal and commands run in an external system terminal do not.
+When Desktop services are unavailable, browsing stays available while package operations explain that they require Rundeep. Managed installation never falls back to ambient `pnpm`, a shell command, a guessed `dsh` executable, or an inactive profile. **Open Rundeep Terminal** is a separate user-controlled escape hatch: its request contains no command, path, or profile and only opens Desktop's built-in terminal; the user decides whether to copy and run displayed text. A later `dsh plugin add` through that built-in terminal receives the same configuration-recovery handoff. Direct `pnpm` or `npm` commands in that terminal and commands run in an external system terminal do not.
 
 ## Install recovery boundary
 
@@ -178,7 +178,7 @@ Raw response bodies, filesystem paths, tokens, environment variables, and comman
 
 - The npm name and monorepo package boundary are established.
 - Catalog attribution, trust rules, and integration decisions are recorded.
-- The Host/Client package is delivered as a built-in RunDeep implementation.
+- The Host/Client package is delivered as a built-in Rundeep implementation.
 
 ### Phase 1: catalog market shell — delivered and built in
 

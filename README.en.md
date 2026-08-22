@@ -1,31 +1,31 @@
-<h1 align="center">RunDeep</h1>
+<h1 align="center">Rundeep</h1>
 
 <p align="center">
-  <strong>An open-source desktop client for Windows and macOS, built on DeepSeek Harness.</strong><br>
-  One-click download, ready to use out of the box.<br>
+  <strong>An open-source desktop agent workspace for Windows and macOS.</strong><br>
+  Multiple Harness engines, native desktop workflows, a plugin market, and composable automation.<br>
   Everything is a plugin — the desktop itself is a plugin.
 </p>
 
-<p align="center"><sub>An independent community project, not affiliated with, authorized by, or endorsed by DeepSeek.<br>No DeepSeek employee or official upstream DeepSeek Harness team member currently participates in this repository; upstream contributors shown by GitHub are inherited from synchronized fork history.<br><a href="README.md">中文</a> · English</sub></p>
+<p align="center"><sub>Rundeep is independently developed by its community and built on DeepSeek Harness and the open-source ecosystem.<br><a href="README.md">中文</a> · English</sub></p>
 
 <p align="center">
-  <img src="assets/desktop-hero-en.png" alt="RunDeep, an open-source desktop client built on DeepSeek Harness" width="100%">
+  <img src="assets/desktop-hero-en.png" alt="Rundeep, an open-source desktop client built on DeepSeek Harness" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/anywhere-labs/deepseek-harness-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/anywhere-labs/deepseek-harness-desktop?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
-  <a href="https://github.com/anywhere-labs/deepseek-harness-desktop/releases"><img src="https://img.shields.io/github/downloads/anywhere-labs/deepseek-harness-desktop/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
-  <a href="https://github.com/anywhere-labs/deepseek-harness-desktop"><img src="https://img.shields.io/github/stars/anywhere-labs/deepseek-harness-desktop?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub stars"></a>
+  <a href="https://github.com/RichGua/Rundeep/releases/latest"><img src="https://img.shields.io/github/v/release/RichGua/Rundeep?style=flat&amp;label=release&amp;color=4D6BFE" alt="Latest release"></a>
+  <a href="https://github.com/RichGua/Rundeep/releases"><img src="https://img.shields.io/github/downloads/RichGua/Rundeep/total?style=flat&amp;label=downloads&amp;color=4D6BFE" alt="Total downloads"></a>
+  <a href="https://github.com/RichGua/Rundeep"><img src="https://img.shields.io/github/stars/RichGua/Rundeep?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
   <a href="https://discord.gg/TJeGqKRNM"><img src="https://img.shields.io/badge/Discord-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" alt="Join Discord"></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows-4493F8?style=flat-square" alt="Supported platforms: macOS and Windows">
 </p>
 
 <p align="center">
-  <img src="assets/desktop-preview.png" alt="RunDeep preview" width="100%">
+  <img src="assets/desktop-preview.png" alt="Rundeep preview" width="100%">
 </p>
 
-RunDeep integrates the local Web UI, Host service, and plugin system from [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) into a native desktop application. It runs a pinned upstream version unchanged, while RunDeep provides the window, tray, terminal, updates, and work profiles through the plugin mechanism provided by DeepSeek Harness.
+Rundeep brings a composable agent runtime to the native desktop: switch between DeepSeek Harness and Codex Harness, manage workspaces and sessions, use native windows, tray, and terminals, and work with profiles, recovery, updates, and a built-in plugin market. It runs a pinned [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) checkout unchanged as its agent and plugin foundation, then uses Electron, Cordis, React, TypeScript, and the OpenAI Codex SDK for Rundeep's desktop and multi-engine capabilities.
 
 <a id="run"></a>
 
@@ -36,7 +36,7 @@ Current release installers support Windows x64 and macOS Universal. No extra env
 | Platform | Download | Installation |
 | --- | --- | --- |
 | Windows x64 | [Download installer](https://www.dshdesktop.cn/api/downloads/windows) | Run the NSIS installer and follow its prompts |
-| macOS Universal | [Download DMG](https://www.dshdesktop.cn/api/downloads/mac) | Open the DMG and drag RunDeep into Applications |
+| macOS Universal | [Download DMG](https://www.dshdesktop.cn/api/downloads/mac) | Open the DMG and drag Rundeep into Applications |
 
 See the [user guide](docs/user-guide.en.md) and [FAQ](docs/faq.en.md) for plugin commands, platform details, and troubleshooting.
 
@@ -52,7 +52,7 @@ Ordinary users can start with the [user guide](docs/user-guide.en.md); the devel
 | --- | --- |
 | Install and use the application | [User guide](docs/user-guide.en.md) |
 | Check platforms, prerequisites, and product boundaries | [FAQ](docs/faq.en.md) |
-| Understand why the project exists | [Why RunDeep](docs/why-desktop.en.md) |
+| Understand why the project exists | [Why Rundeep](docs/why-desktop.en.md) |
 | See the full documentation and README map | [Documentation index](docs/README.en.md) |
 
 ### Developer and maintainer documentation
@@ -88,7 +88,7 @@ Ordinary users can start with the [user guide](docs/user-guide.en.md); the devel
     </td>
     <td width="50%" valign="top">
       <h3>Co-build the Plugin Ecosystem</h3>
-      <p>The DSH plugin ecosystem is built by the community. Upstream plugins, RunDeep plugins, and other community plugins follow shared conventions and can work together through the same composition mechanism. Join us — read the <a href="docs/plugin-ecosystem.en.md">DSH plugin ecosystem manifesto</a>.</p>
+      <p>The DSH plugin ecosystem is built by the community. Upstream plugins, Rundeep plugins, and other community plugins follow shared conventions and can work together through the same composition mechanism. Join us — read the <a href="docs/plugin-ecosystem.en.md">DSH plugin ecosystem manifesto</a>.</p>
     </td>
   </tr>
 </table>
@@ -97,39 +97,27 @@ Ordinary users can start with the [user guide](docs/user-guide.en.md); the devel
 
 Plugins are extensions that add capabilities to DSH — models, tools, interfaces, and workflows can all be plugins, combined like building blocks.
 
-RunDeep does not modify upstream source, and it is not a fixed, hardcoded shell. A pinned upstream DeepSeek Harness version runs unchanged; the desktop shell itself — the window, tray, terminal, updates, and work profiles — integrates as a DSH plugin through the plugin mechanism provided by DeepSeek Harness. From the core agent to the desktop shell, the whole product follows the same "everything is a plugin" rule: plugins compatible with the pinned upstream version can be used, while desktop capabilities are composed, replaced, and evolved in the same way.
+Rundeep does not modify upstream source, and it is not a fixed, hardcoded shell. A pinned upstream DeepSeek Harness version runs unchanged; the desktop shell itself — the window, tray, terminal, updates, and work profiles — integrates as a DSH plugin through the plugin mechanism provided by DeepSeek Harness. From the core agent to the desktop shell, the whole product follows the same "everything is a plugin" rule: plugins compatible with the pinned upstream version can be used, while desktop capabilities are composed, replaced, and evolved in the same way.
 
 We want the plugin ecosystem to work like a phone app store: every plugin is built against the same set of rules, so plugins can be installed together and work together without interfering with each other.
 
 ### For developers
 
-Unlike many other projects, this project itself is a DSH [plugin](docs/plugin-development.en.md): the desktop shell uses the same plugin composition mechanism as third-party plugins. Desktop plugin capabilities are now available. We provide Desktop services so plugin developers can integrate their plugins with desktop capabilities: for example, viewing and switching work profiles, or installing, updating, and removing plugins in the active profile. See the [Desktop plugin API](dsh-plugin-desktop/docs/plugin-services.md) for complete usage details. See [Why RunDeep](docs/why-desktop.en.md) and [Plugin development](docs/plugin-development.en.md) for the reasoning and the third-party boundary.
+Unlike many other projects, this project itself is a DSH [plugin](docs/plugin-development.en.md): the desktop shell uses the same plugin composition mechanism as third-party plugins. Desktop plugin capabilities are now available. We provide Desktop services so plugin developers can integrate their plugins with desktop capabilities: for example, viewing and switching work profiles, or installing, updating, and removing plugins in the active profile. See the [Desktop plugin API](dsh-plugin-desktop/docs/plugin-services.md) for complete usage details. See [Why Rundeep](docs/why-desktop.en.md) and [Plugin development](docs/plugin-development.en.md) for the reasoning and the third-party boundary.
 
-## Relationship to DeepSeek Harness
+## Open-source foundation and the Rundeep experience
 
-RunDeep is an independent community project built on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) and the Cordis plugin model, intended to provide an open and composable DSH desktop experience.
+Rundeep builds on a mature open-source ecosystem: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) provides the agent, model, tool, session, workflow, Web UI, and plugin foundation; [Cordis](https://github.com/cordiverse/cordis) provides composable services and plugins; Electron, React, and TypeScript power the native desktop and interface layers; and the OpenAI Codex SDK powers Rundeep's Codex Harness engine.
 
-This repository is independently maintained by the community. No DeepSeek employee or member of the official upstream DeepSeek Harness team currently participates in its development, maintenance, or governance. Contributors from the upstream project may appear on GitHub's Contributors page because this repository inherited and later synchronized upstream commit history when it was forked. Such attribution reflects commit provenance only and does not imply involvement in this repository or any affiliation, partnership, authorization, or endorsement.
+On that foundation, Rundeep focuses on its own product experience:
 
-The upstream project provides the core agent capabilities, plugin system, and Web UI. RunDeep primarily provides:
+- One-click switching between DeepSeek Harness and Codex Harness, reusing endpoint and credential settings
+- Native windows, tray, terminals, local-service lifecycle management, and cross-platform installers
+- Composable profiles, startup and update recovery, diagnostic export, and safe rollback
+- A built-in open plugin market and service APIs for desktop plugins
+- A pinned, unmodified DeepSeek Harness checkout for plugin compatibility and predictable upgrades
 
-- Desktop application packaging
-- Starting, stopping, and recovering the local service
-- Desktop window and system tray integration
-- macOS and Windows installer builds and releases
-- An interface designed for desktop use
-
-If you prefer to run DeepSeek Harness from the command line or contribute to its core functionality, refer to the upstream repository first.
-
-## Special Thanks
-
-Special thanks to the [original DeepSeek Harness repository](https://github.com/deepseek-ai/deepseek-harness) and the DeepSeek AI team. RunDeep is built from a pinned upstream checkout, and its core agents, models, tools, sessions, Web UI, and plugin ecosystem come from that project.
-
-We also thank [Cordis](https://github.com/cordiverse/cordis) for the plugin foundation that makes this composition possible. RunDeep would not exist without these open-source projects.
-
-We are also grateful to the [Koishi.js](https://koishi.chat/) project and community for their long-standing work on plugin practices, tooling, and shared knowledge, and to everyone who contributes discussions, testing, feedback, and plugins.
-
-Also, and you.
+Rundeep-owned code is licensed under the MIT License. Third-party components retain their respective copyrights and open-source licenses; see [THIRD_PARTY_NOTICES.md](dsh-plugin-desktop/THIRD_PARTY_NOTICES.md) for details.
 
 <a id="run-from-source"></a>
 
@@ -158,13 +146,13 @@ Choose whichever platform you prefer to discuss usage, plugin development, and p
   </thead>
   <tbody>
     <tr>
-      <td align="center"><img src="assets/community-wechat-group.png" alt="RunDeep WeCom QR code" title="Scan to add us on WeCom" width="180" height="180"></td>
-      <td align="center"><img src="assets/community-qq-group.jpg" alt="RunDeep QQ group QR code" width="180" height="180"></td>
+      <td align="center"><img src="assets/community-wechat-group.png" alt="Rundeep WeCom QR code" title="Scan to add us on WeCom" width="180" height="180"></td>
+      <td align="center"><img src="assets/community-qq-group.jpg" alt="Rundeep QQ group QR code" width="180" height="180"></td>
     </tr>
   </tbody>
 </table>
 
-Discord: [Join the RunDeep community](https://discord.gg/TJeGqKRNM)
+Discord: [Join the Rundeep community](https://discord.gg/TJeGqKRNM)
 
 If you would like to join our technical team, contact us at [t4wefan@qq.com](mailto:t4wefan@qq.com).
 
@@ -190,22 +178,18 @@ Ecosystem projects and developer tools around DeepSeek Harness.
 | Awesome DeepSeek Harness | Curated list of DeepSeek Harness plugins, tools, and infrastructure. | [GitHub](https://github.com/0xsline/awesome-deepseek-harness) · [Website](https://deepseekdocs.com/) |
 | MkSaaS · TanStarter | Commercial SaaS starter templates for indie developers. MkSaaS is built on Next.js; TanStarter on TanStack Start and Cloudflare, with AI, auth, payments, and admin baked in. | [MkSaaS](https://mksaas.com) · [TanStarter](https://tanstarter.dev) |
 
-<sub>To list your project, join the WeChat group and message @王博升Benson, or contact t4wefan@qq.com, or <a href="https://github.com/anywhere-labs/deepseek-harness-desktop/issues">open an issue</a>.</sub>
+<sub>To list your project, join the WeChat group and message @王博升Benson, or contact t4wefan@qq.com, or <a href="https://github.com/RichGua/Rundeep/issues">open an issue</a>.</sub>
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
-
-> “DeepSeek Harness” is a registered trademark of DeepSeek AI. The name is used here solely to accurately describe compatibility, technical origin, and this project's relationship to upstream software.
-
-> RunDeep is an independent community project and is not affiliated with, sponsored by, authorized by, or endorsed by DeepSeek.
+Rundeep-owned code is licensed under the [MIT License](LICENSE). Bundled third-party components retain their respective copyrights and licenses; see [THIRD_PARTY_NOTICES.md](dsh-plugin-desktop/THIRD_PARTY_NOTICES.md). Project names are used only to identify technical dependencies and compatibility.
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=anywhere-labs%2Fdeepseek-harness-desktop&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=RichGua%2FRundeep&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=anywhere-labs/deepseek-harness-desktop&type=date&theme=dark&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=anywhere-labs/deepseek-harness-desktop&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=anywhere-labs/deepseek-harness-desktop&type=date&legend=top-left&sealed_token=BRTkOyC4czCEkIyFb5-QxrsC-kaDotBJ8tsjxrWs-UGfmBqfRCXSwieZPlVTCYOjJVEZ29uLvmBjAPREB524J5dPN1jk-UA7ajFdLdrbjumJqoOBeGWmig" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=RichGua/Rundeep&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=RichGua/Rundeep&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=RichGua/Rundeep&type=date&legend=top-left" />
  </picture>
 </a>

@@ -55,10 +55,10 @@ const rawCatalog = {
     revision: 'sha256:fixture',
   },
   packages: [{
-    id: 'anywhere-labs/deepseek-harness-desktop/dsh-plugin-desktop',
-    name: 'deepseek-harness-desktop',
-    owner: 'anywhere-labs',
-    url: 'https://github.com/anywhere-labs/deepseek-harness-desktop',
+    id: 'RichGua/Rundeep/dsh-plugin-desktop',
+    name: 'rundeep',
+    owner: 'RichGua',
+    url: 'https://github.com/RichGua/Rundeep',
     category: 'dev',
     description: { en: 'Desktop shell', zh: '桌面外壳' },
     pushedAt: '2026-08-17T05:45:19Z',
@@ -175,10 +175,10 @@ describe('1024Store adapter', () => {
       id: rawCatalog.packages[0]!.id,
       summary: 'Desktop shell',
       repository: {
-        url: 'https://github.com/anywhere-labs/deepseek-harness-desktop',
+        url: 'https://github.com/richgua/rundeep',
         subdirectory: 'dsh-plugin-desktop',
       },
-      media: { icon: { assetRef: publisherAssetRef, role: 'publisher-avatar', alt: 'anywhere-labs' } },
+      media: { icon: { assetRef: publisherAssetRef, role: 'publisher-avatar', alt: 'richgua' } },
       provenance: { sourceRecordId: source().sourceRecordId },
     })
     expect(JSON.stringify(snapshot)).not.toContain('unsafe-value')
@@ -187,9 +187,9 @@ describe('1024Store adapter', () => {
       providerRevision: 'sha256:fixture',
     })
     expect(register).toHaveBeenCalledWith({
-      remoteUrl: 'https://github.com/anywhere-labs.png?size=96',
+      remoteUrl: 'https://github.com/richgua.png?size=96',
       role: 'publisher-avatar',
-      alt: 'anywhere-labs',
+      alt: 'richgua',
       sourceRecordId: source().sourceRecordId,
       itemId: rawCatalog.packages[0]!.id,
       allowedHostnames: ['github.com', 'avatars.githubusercontent.com'],

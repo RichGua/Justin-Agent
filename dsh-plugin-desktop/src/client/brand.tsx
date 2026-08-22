@@ -2,7 +2,7 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 
-function RunDeepMark({ size, className }: { size?: number | undefined; className?: string | undefined }) {
+function RundeepMark({ size, className }: { size?: number | undefined; className?: string | undefined }) {
   const dimension = size ?? 28
   return (
     <svg className={className} width={dimension} height={dimension} viewBox="0 0 64 64" aria-hidden="true">
@@ -13,15 +13,15 @@ function RunDeepMark({ size, className }: { size?: number | undefined; className
   )
 }
 
-function RunDeepName() {
-  return <span className="rundeepBrandName">RunDeep</span>
+function RundeepName() {
+  return <span className="rundeepBrandName">Rundeep</span>
 }
 
 /** Replace upstream-owned visual slots without changing the DSH runtime packages. */
-export function applyRunDeepBrand(ctx: ClientContext): void {
+export function applyRundeepBrand(ctx: ClientContext): void {
   ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.inject('sidebar.brand.name', () => ctx.slots.inject('conversation.hero.brand.mark', function* () {
-    yield ctx.slots.register({ name: 'sidebar.brand.mark' }, RunDeepMark)
-    yield ctx.slots.register({ name: 'sidebar.brand.name' }, RunDeepName)
-    yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, RunDeepMark)
+    yield ctx.slots.register({ name: 'sidebar.brand.mark' }, RundeepMark)
+    yield ctx.slots.register({ name: 'sidebar.brand.name' }, RundeepName)
+    yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, RundeepMark)
   })))
 }

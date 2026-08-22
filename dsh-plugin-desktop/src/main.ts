@@ -1,8 +1,8 @@
-/** RunDeep executable: minimal Electron bootstrap around the Host Cordis root. */
+/** Rundeep executable: minimal Electron bootstrap around the Host Cordis root. */
 
 import { app, crashReporter, dialog } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   boot,
@@ -102,9 +102,15 @@ import {
 } from './windows-volume-diagnostics.ts'
 import type { RendererBootReport } from './renderer-boot-contract.ts'
 import { desktopLocaleFromLanguageTag } from './tray-locale.ts'
+import { installLegacyCodexSessionEventCompatibility } from './session-event-compat.ts'
+import {
+  DESKTOP_PRODUCT_NAME,
+  LEGACY_DESKTOP_PRODUCT_NAME,
+  selectDesktopUserDataDirectory,
+} from './desktop-user-data.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
-const PRODUCT_NAME = 'RunDeep'
+const PRODUCT_NAME = DESKTOP_PRODUCT_NAME
 
 class RendererStartupFailure extends Error {
   constructor(
@@ -148,14 +154,14 @@ async function showInstallRollbackNotice(
   const copy = locale === 'zh'
     ? {
         title: '插件安装已回滚',
-        message: `RunDeep 已恢复安装 ${transaction.packageName} 前的配置。`,
-        detail: '上一次启动未能通过健康验证。RunDeep 已在本地保存诊断信息，并恢复 package.json、pnpm-lock.yaml 和 pnpm-workspace.yaml；诊断信息不会自动上传。',
+        message: `Rundeep 已恢复安装 ${transaction.packageName} 前的配置。`,
+        detail: '上一次启动未能通过健康验证。Rundeep 已在本地保存诊断信息，并恢复 package.json、pnpm-lock.yaml 和 pnpm-workspace.yaml；诊断信息不会自动上传。',
         confirm: '知道了',
       }
     : {
         title: 'Plugin installation rolled back',
-        message: `RunDeep restored the configuration from before ${transaction.packageName} was installed.`,
-        detail: 'The previous startup did not pass its health check. RunDeep saved diagnostics locally and restored package.json, pnpm-lock.yaml, and pnpm-workspace.yaml. Diagnostics are not uploaded automatically.',
+        message: `Rundeep restored the configuration from before ${transaction.packageName} was installed.`,
+        detail: 'The previous startup did not pass its health check. Rundeep saved diagnostics locally and restored package.json, pnpm-lock.yaml, and pnpm-workspace.yaml. Diagnostics are not uploaded automatically.',
         confirm: 'OK',
       }
   try {
@@ -185,14 +191,14 @@ async function showProfileCheckpointRestoreNotice(
   const copy = locale === 'zh'
     ? {
         title: '已恢复最近一次可用配置',
-        message: `RunDeep 已恢复最近一次成功启动的配置「${profileName}」。`,
-        detail: '诊断信息已尽可能保存在本地；如果恢复涉及依赖声明，插件依赖也已按锁文件重新同步。RunDeep 现在将重新启动。',
+        message: `Rundeep 已恢复最近一次成功启动的配置「${profileName}」。`,
+        detail: '诊断信息已尽可能保存在本地；如果恢复涉及依赖声明，插件依赖也已按锁文件重新同步。Rundeep 现在将重新启动。',
         confirm: '重新启动',
       }
     : {
         title: 'Last healthy configuration restored',
-        message: `RunDeep restored Profile “${profileName}” from the last successful startup.`,
-        detail: 'Diagnostics were saved locally when possible. When dependency declarations were restored, plugin dependencies were synchronized from the lockfile. RunDeep will now restart.',
+        message: `Rundeep restored Profile “${profileName}” from the last successful startup.`,
+        detail: 'Diagnostics were saved locally when possible. When dependency declarations were restored, plugin dependencies were synchronized from the lockfile. Rundeep will now restart.',
         confirm: 'Restart',
       }
   try {
@@ -773,6 +779,9 @@ async function start(): Promise<void> {
     }
     startupStage = 'host-boot'
     lifecycleRecorder.transitionStartupStage(startupStage)
+    // Must run before Host boot: persistence may otherwise reject Desktop's
+    // historical informational Codex events as unknown required vocabulary.
+    installLegacyCodexSessionEventCompatibility()
     const releasePackageResolver = installProfilePackageResolver(prepared.bareModuleBaseUrl)
     // Configure the launcher-owned terminal before Host boot so the native
     // recovery window can still open it when profile composition fails.
@@ -1124,6 +1133,14 @@ async function start(): Promise<void> {
 
 async function run(): Promise<void> {
   app.setName(PRODUCT_NAME)
+  const primaryUserDataDirectory = app.getPath('userData')
+  const selectedUserDataDirectory = selectDesktopUserDataDirectory(
+    primaryUserDataDirectory,
+    join(dirname(primaryUserDataDirectory), LEGACY_DESKTOP_PRODUCT_NAME),
+  )
+  if (selectedUserDataDirectory !== primaryUserDataDirectory) {
+    app.setPath('userData', selectedUserDataDirectory)
+  }
   if (process.argv.includes('--export-diagnostics')) {
     try {
       await app.whenReady()

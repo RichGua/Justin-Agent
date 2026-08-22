@@ -17,13 +17,13 @@ describe('native macOS application menu', () => {
   })
 
   it('localizes the complete Simplified Chinese menu while retaining native roles', () => {
-    const template = macApplicationMenuTemplate('RunDeep', 'zh-CN')
+    const template = macApplicationMenuTemplate('Rundeep', 'zh-CN')
 
     expect(template.map(item => item.label)).toEqual([
-      'RunDeep', '文件', '编辑', '显示', '窗口',
+      'Rundeep', '文件', '编辑', '显示', '窗口',
     ])
     expect(submenu(template[0]!).map(item => item.label).filter(Boolean)).toEqual([
-      '关于 RunDeep', '服务', '隐藏 RunDeep', '隐藏其他', '全部显示', '退出 RunDeep',
+      '关于 Rundeep', '服务', '隐藏 Rundeep', '隐藏其他', '全部显示', '退出 Rundeep',
     ])
     expect(submenu(template[1]!)).toEqual([
       expect.objectContaining({ label: '关闭窗口', role: 'close' }),
@@ -41,21 +41,21 @@ describe('native macOS application menu', () => {
   })
 
   it('keeps the English fallback complete', () => {
-    const template = macApplicationMenuTemplate('RunDeep', 'en')
+    const template = macApplicationMenuTemplate('Rundeep', 'en')
 
     expect(template.map(item => item.label)).toEqual([
-      'RunDeep', 'File', 'Edit', 'View', 'Window',
+      'Rundeep', 'File', 'Edit', 'View', 'Window',
     ])
     expect(submenu(template[0]!)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'About RunDeep', role: 'about' }),
-      expect.objectContaining({ label: 'Quit RunDeep', role: 'quit' }),
+      expect.objectContaining({ label: 'About Rundeep', role: 'about' }),
+      expect.objectContaining({ label: 'Quit Rundeep', role: 'quit' }),
     ]))
   })
 
   it('places trusted desktop actions in the application submenu', () => {
     const invokeTerminal = vi.fn()
-    const template = macApplicationMenuTemplate('RunDeep', 'en', [{
-      label: 'Open RunDeep Terminal',
+    const template = macApplicationMenuTemplate('Rundeep', 'en', [{
+      label: 'Open Rundeep Terminal',
       click: invokeTerminal,
     }, {
       label: 'Profile: desktop',
@@ -63,7 +63,7 @@ describe('native macOS application menu', () => {
     }])
 
     expect(submenu(template[0]!)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Open RunDeep Terminal' }),
+      expect.objectContaining({ label: 'Open Rundeep Terminal' }),
       expect.objectContaining({
         label: 'Profile: desktop',
         submenu: [expect.objectContaining({ label: 'web', type: 'radio', checked: false })],
